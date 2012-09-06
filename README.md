@@ -1,0 +1,8 @@
+node-mruby
+==========
+
+preqreuirements
+---------------
+
+  * bison
+
