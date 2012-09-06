@@ -92,7 +92,8 @@ public:
         Local<ObjectTemplate> instance_template = constructor_template->InstanceTemplate();
         instance_template->SetInternalFieldCount(1);
 
-        NODE_SET_PROTOTYPE_METHOD(t, "run", NodeMRuby::run);
+        NODE_SET_PROTOTYPE_METHOD(t, "run",      NodeMRuby::run);
+        NODE_SET_PROTOTYPE_METHOD(t, "loadFile", NodeMRuby::loadFile);
 
         target->Set(String::NewSymbol("mRuby"), constructor_template->GetFunction());
     }
@@ -124,6 +125,10 @@ public:
 
         ARG_STR(0, src);
 
+        mrbc_filename(MRB_, CXT_, "-e");
+
+        // TODO: use mrb_load_string_cxt?
+
         struct mrb_parser_state *parser = mrb_parser_new(MRB_);
         parser->s = *src;
         parser->send = *src + strlen(*src);
@@ -150,6 +155,27 @@ public:
             Handle<Value> retval = rubyobj2js(MRB_, result);
             mrb_parser_free(parser);
             return scope.Close(retval);
+        }
+    }
+
+    static Handle<Value> loadFile(const Arguments& args) {
+        HandleScope scope;
+
+        ARG_STR(0, fname);
+
+        mrbc_filename(MRB_, CXT_, *fname);
+        FILE * fp = fopen(*fname, "rb");
+        if (!fp) {
+            return ThrowException(Exception::Error(String::New("Cannot open file")));
+        }
+
+        mrb_value result = mrb_load_file_cxt(MRB_, fp, CXT_);
+        if (MRB_->exc) {
+            // TODO: throw exception?
+            mrb_p(MRB_, mrb_obj_value(MRB_->exc));
+            return scope.Close(Undefined());
+        } else {
+            return scope.Close(rubyobj2js(MRB_, result));
         }
     }
 };
