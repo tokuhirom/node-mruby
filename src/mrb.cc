@@ -16,6 +16,106 @@ using namespace node;
 #define MRB_ (Unwrap<NodeMRuby>(args.This())->mrb_)
 #define CXT_ (Unwrap<NodeMRuby>(args.This())->cxt_)
 
+KHASH_DECLARE(ht, mrb_value, mrb_value, 1);
+
+static Handle<Value> rubyobj2js(mrb_value v) {
+    HandleScope scope;
+    switch (mrb_type(v)) {
+    case MRB_TT_FALSE:
+        return scope.Close(Boolean::New(false));
+    case MRB_TT_FREE:
+        // what's this object?
+        abort();
+    case MRB_TT_TRUE:
+        return scope.Close(Boolean::New(true));
+    case MRB_TT_FIXNUM:
+        return scope.Close(Integer::New(mrb_fixnum(v)));
+    case MRB_TT_SYMBOL:
+        return scope.Close(Integer::New(mrb_symbol(v)));
+    case MRB_TT_UNDEF:
+        return scope.Close(Undefined());
+    case MRB_TT_FLOAT:
+        return scope.Close(Number::New(mrb_float(v)));
+    case MRB_TT_MAIN:
+        // what's this object?
+        abort();
+    case MRB_TT_OBJECT:
+        // what's this object?
+        abort();
+    case MRB_TT_CLASS:
+        // what's this object?
+        abort();
+    case MRB_TT_MODULE:
+        // what's this object?
+        abort();
+    case MRB_TT_ICLASS:
+        // what's this object?
+        abort();
+    case MRB_TT_SCLASS:
+        // what's this object?
+        abort();
+    case MRB_TT_PROC:
+        // what's this object?
+        abort();
+    case MRB_TT_ARRAY: {
+        int len = RARRAY_LEN(v);
+        Handle<Array> retval = Array::New();
+        mrb_value *ptr = RARRAY_PTR(v);
+        for (int i=0; i<len; ++i) {
+            retval->Set(i, rubyobj2js(ptr[i]));
+        }
+        return scope.Close(retval);
+    }
+    case MRB_TT_HASH: {
+        khash_t(ht) * h = RHASH_TBL(v);
+        khiter_t k;
+        v8::Local<v8::Object> retval = v8::Object::New();
+
+        if (!h) { abort(); }
+        for (k = kh_begin(h); k != kh_end(h); k++) {
+            if (kh_exist(h, k)) {
+                mrb_value kk = kh_key(h,k);
+                mrb_value vv = kh_value(h,k);
+
+                retval->Set(
+                    rubyobj2js(kk),
+                    rubyobj2js(vv)
+                );
+            }
+        }
+        return scope.Close(retval);
+    }
+    case MRB_TT_STRING: {
+        return scope.Close(String::New(RSTRING_PTR(v), RSTRING_LEN(v)));
+    }
+    case MRB_TT_RANGE:
+        // what's this object?
+        abort();
+    case MRB_TT_REGEX:
+        // what's this object?
+        abort();
+    case MRB_TT_STRUCT:
+        // what's this object?
+        abort();
+    case MRB_TT_EXCEPTION:
+        // what's this object?
+        abort();
+    case MRB_TT_MATCH:
+        // what's this object?
+        abort();
+    case MRB_TT_FILE:
+        // what's this object?
+        abort();
+    case MRB_TT_ENV:
+        // what's this object?
+        abort();
+    case MRB_TT_DATA:
+        // what's this object?
+        abort();
+    }
+    return ThrowException(Exception::Error(String::New("[node-mruby] Unknown object type")));
+}
+
 class NodeMRuby : ObjectWrap {
 public:
     mrb_state* mrb_;
@@ -80,16 +180,17 @@ public:
                         /* pass a proc for evaulation */
                         mrb_proc_new(MRB_, MRB_->irep[n]),
                         mrb_top_self(MRB_));
+        Handle<Value> retval;
         if (MRB_->exc) {
             mrb_p(MRB_, mrb_obj_value(MRB_->exc));
-            MRB_->exc = 0;
+            return scope.Close(Undefined());
         } else {
-            // TODO return value
             mrb_p(MRB_, result);
-        }
-        mrb_parser_free(parser);
 
-        return scope.Close(Undefined());
+            Handle<Value> retval = rubyobj2js(result);
+            mrb_parser_free(parser);
+            return scope.Close(retval);
+        }
     }
 };
 
