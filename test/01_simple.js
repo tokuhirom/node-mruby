@@ -12,6 +12,8 @@ test(function (t) {
   t.equivalent(mruby.run('[3.14,5963]'), [3.14,5963]);
   t.equivalent(mruby.run('{}'), {});
   t.equivalent(mruby.run('"hoge"'), 'hoge');
+  t.equivalent(typeof(mruby.run('1..10')), 'object');
+  t.ok(mruby.run('1..10').inspect().match(/^#<Range:/));
   t.end();
 });
 
