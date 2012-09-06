@@ -1,3 +1,3 @@
 #!/bin/sh
 cd vendor/mruby/
-make
+make CFLAGS="-g -fPIC"

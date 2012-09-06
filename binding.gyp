@@ -3,7 +3,7 @@
         {
             'target_name': 'mruby',
             'sources': [
-                './src/mrb.cc',
+                './src/mrb.cc'
             ],
             'include_dirs': [
                   'vendor/mruby/include/'
@@ -12,6 +12,7 @@
                 'libmruby'
             ],
             'libraries': [
+                '-lmruby'
             ],
             'cflags!': [ '-fno-exceptions' ],
             'cflags_cc!': [ '-fno-exceptions' ],
@@ -24,6 +25,9 @@
                         ]
                     },
                 }],
+            ],
+            'ldflags': [
+                '-L /home/tokuhirom/dev/node-mruby/vendor/mruby/lib/'
             ],
             'cflags': [
             ]
