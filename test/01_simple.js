@@ -6,16 +6,16 @@ var mRuby = require('../index.js'),
 test(function (t) {
     var mruby = new mRuby();
     t.ok(mruby, 'mruby');
-    t.equivalent(mruby.run('false'), false);
-    t.equivalent(mruby.run('true'), true);
-    t.equivalent(mruby.run('3'), 3);
-    t.equivalent(typeof(mruby.run(':foo')), 'number');
-    t.equivalent(mruby.run('3.14'), 3.14);
-    t.equivalent(mruby.run('[3.14,5963]'), [3.14,5963]);
-    t.equivalent(mruby.run('{}'), {});
-    t.equivalent(mruby.run('"hoge"'), 'hoge');
-    t.equivalent(typeof(mruby.run('1..10')), 'object');
-    t.ok(mruby.run('1..50').inspect().match(/^#<Range:/), 'range');
+    t.equivalent(mruby.loadString('false'), false);
+    t.equivalent(mruby.loadString('true'), true);
+    t.equivalent(mruby.loadString('3'), 3);
+    t.equivalent(typeof(mruby.loadString(':foo')), 'number');
+    t.equivalent(mruby.loadString('3.14'), 3.14);
+    t.equivalent(mruby.loadString('[3.14,5963]'), [3.14,5963]);
+    t.equivalent(mruby.loadString('{}'), {});
+    t.equivalent(mruby.loadString('"hoge"'), 'hoge');
+    t.equivalent(typeof(mruby.loadString('1..10')), 'object');
+    t.ok(mruby.loadString('1..50').inspect().match(/^#<Range:/), 'range');
     t.end();
 });
 

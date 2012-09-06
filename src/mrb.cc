@@ -17,7 +17,7 @@ using namespace node;
 
 KHASH_DECLARE(ht, mrb_value, mrb_value, 1);
 
-static Handle<Value> rubyobj2js(mrb_state*mrb, mrb_value &v);
+static Handle<Value> rubyobj2js(mrb_state*mrb, const mrb_value &v);
 
 #define VALUE_ (Unwrap<NodeMRubyObject>(args.This())->value_)
 #define MRB_   (Unwrap<NodeMRubyObject>(args.This())->mrb_)
@@ -92,8 +92,8 @@ public:
         Local<ObjectTemplate> instance_template = constructor_template->InstanceTemplate();
         instance_template->SetInternalFieldCount(1);
 
-        NODE_SET_PROTOTYPE_METHOD(t, "run",      NodeMRuby::run);
-        NODE_SET_PROTOTYPE_METHOD(t, "loadFile", NodeMRuby::loadFile);
+        NODE_SET_PROTOTYPE_METHOD(t, "loadString", NodeMRuby::loadString);
+        NODE_SET_PROTOTYPE_METHOD(t, "loadFile",   NodeMRuby::loadFile);
 
         target->Set(String::NewSymbol("mRuby"), constructor_template->GetFunction());
     }
@@ -120,41 +120,19 @@ public:
         mrbc_context_free(mrb_, cxt_);
         mrb_close(mrb_);
     }
-    static Handle<Value> run(const Arguments& args) {
+    static Handle<Value> loadString(const Arguments& args) {
         HandleScope scope;
 
         ARG_STR(0, src);
 
         mrbc_filename(MRB_, CXT_, "-e");
 
-        // TODO: use mrb_load_string_cxt?
+        mrb_value result = mrb_load_string_cxt(MRB_, *src, CXT_);
 
-        struct mrb_parser_state *parser = mrb_parser_new(MRB_);
-        parser->s = *src;
-        parser->send = *src + strlen(*src);
-        parser->lineno = 1;
-        mrb_parser_parse(parser, CXT_);
-
-        if (0 < parser->nerr) {
-            printf("line %d: %s\n", parser->error_buffer[0].lineno, parser->error_buffer[0].message);
-            mrb_parser_free(parser);
-            return ThrowException(Exception::Error(String::New("Syntax error")));
-        }
-
-        int n = mrb_generate_code(MRB_, parser);
-        mrb_value result = mrb_run(MRB_,
-                        /* pass a proc for evaulation */
-                        mrb_proc_new(MRB_, MRB_->irep[n]),
-                        mrb_top_self(MRB_));
-        Handle<Value> retval;
         if (MRB_->exc) {
-            // TODO: throw exception?
-            mrb_p(MRB_, mrb_obj_value(MRB_->exc));
-            return scope.Close(Undefined());
+            return ThrowException(rubyobj2js(MRB_, mrb_obj_value(MRB_->exc)));
         } else {
-            Handle<Value> retval = rubyobj2js(MRB_, result);
-            mrb_parser_free(parser);
-            return scope.Close(retval);
+            return scope.Close(rubyobj2js(MRB_, result));
         }
     }
 
@@ -171,9 +149,7 @@ public:
 
         mrb_value result = mrb_load_file_cxt(MRB_, fp, CXT_);
         if (MRB_->exc) {
-            // TODO: throw exception?
-            mrb_p(MRB_, mrb_obj_value(MRB_->exc));
-            return scope.Close(Undefined());
+            return ThrowException(rubyobj2js(MRB_, mrb_obj_value(MRB_->exc)));
         } else {
             return scope.Close(rubyobj2js(MRB_, result));
         }
@@ -182,7 +158,7 @@ public:
 
 #undef MRB_
 
-static Handle<Value> rubyobj2js(mrb_state *mrb, mrb_value &v) {
+static Handle<Value> rubyobj2js(mrb_state *mrb, const mrb_value &v) {
     HandleScope scope;
     switch (mrb_type(v)) {
     case MRB_TT_FALSE:
