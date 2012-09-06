@@ -66,7 +66,6 @@ public:
     static Handle<Value> inspect(const Arguments& args) {
         HandleScope scope;
         mrb_value* val = VALUE_;
-        mrb_p(MRB_, *val);
         mrb_value inspected = mrb_obj_inspect(MRB_, *val);
         Handle<Value> retval = rubyobj2js(MRB_, inspected);
         return scope.Close(retval);
@@ -144,11 +143,10 @@ public:
                         mrb_top_self(MRB_));
         Handle<Value> retval;
         if (MRB_->exc) {
+            // TODO: throw exception?
             mrb_p(MRB_, mrb_obj_value(MRB_->exc));
             return scope.Close(Undefined());
         } else {
-            mrb_p(MRB_, result);
-
             Handle<Value> retval = rubyobj2js(MRB_, result);
             mrb_parser_free(parser);
             return scope.Close(retval);
