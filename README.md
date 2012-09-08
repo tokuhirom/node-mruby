@@ -4,5 +4,5 @@ node-mruby
 preqreuirements
 ---------------
 
-  * bison
+  * bison?
 

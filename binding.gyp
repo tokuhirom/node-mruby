@@ -30,6 +30,7 @@
                 '-L /home/tokuhirom/dev/node-mruby/vendor/mruby/lib/'
             ],
             'cflags': [
+                '-g'
             ]
         },
         {

@@ -49,6 +49,12 @@
             String::New("Argument " #I " must be an Buffer"))); \
     void * VAR = Buffer::Data(args[I]->ToObject());
 
+#define ARG_FUNC(I, VAR) \
+    if (args.Length() <= (I) || !args[I]->IsFunction()) \
+        return ThrowException(Exception::TypeError( \
+              String::New("Argument " #I " must be a function"))); \
+    Local<Function> VAR = Local<Function>::Cast(args[I]);
+
 /* ******************************************************
  * Class construction utilities
  */
