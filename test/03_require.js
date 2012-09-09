@@ -6,9 +6,8 @@ var mRuby = require('../index.js'),
 test(function (t) {
     try {
         var mruby = new mRuby();
-        mruby.loadString('NodeJS.require("fs"); 1');
-        mruby.loadString('NodeJS.require("fs").readFileSync');
-    } catch (e) { console.log(e); }
+        t.ok(mruby.loadString('NodeJS.require("fs").readFileSync("hoge.js", "utf-8")').match(/node/));
+    } catch (e) { console.log(e); t.fail(); }
     t.end();
 });
 

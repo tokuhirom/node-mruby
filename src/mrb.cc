@@ -40,6 +40,7 @@ static const struct mrb_data_type node_mruby_function_data_type = {
 
 static mrb_value node_require(mrb_state *mrb, mrb_value self);
 static mrb_value node_eval(mrb_state *mrb, mrb_value self);
+static mrb_value node_object_method_missing(mrb_state *mrb, mrb_value self);
 
 #define VALUE_ (Unwrap<NodeMRubyObject>(args.This())->value_)
 #define MRB_   (Unwrap<NodeMRubyObject>(args.This())->mrb_)
@@ -147,6 +148,8 @@ public:
         mrb_define_class_method(mrb_, s, "eval",    node_eval,         ARGS_REQ(1));
 
         this->mruby_node_object_class_ = mrb_define_class(mrb_, "NodeJS::Object", mrb_->object_class);
+        MRB_SET_INSTANCE_TT(this->mruby_node_object_class_, MRB_TT_DATA);
+        mrb_define_method(mrb_, this->mruby_node_object_class_, "method_missing", node_object_method_missing, ARGS_ANY());
 
         mrb_->ud = this;
     }
@@ -287,7 +290,7 @@ static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val) {
     } else if (val->IsFalse()) {
         return mrb_false_value();
     } else if (val->IsNull()) {
-        return mrb_undef_value();
+        return mrb_nil_value();
     } else if (val->IsUndefined()) {
         return mrb_undef_value();
     } else if (val->IsString()) {
@@ -305,18 +308,6 @@ static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val) {
         NodeMRubyValueContainer * vc = new NodeMRubyValueContainer(val);
         return mrb_obj_value(Data_Wrap_Struct(mrb, c, &node_mruby_function_data_type, vc));
     } else if (val->IsObject()) {
-        // if (NodePerlObject::constructor_template->HasInstance(jsobj)) {
-        /*
-        Handle<Object> jsobj = Handle<Object>::Cast(val);
-        Handle<Array> keys = jsobj->GetOwnPropertyNames();
-        mrb_value hash = mrb_hash_new(mrb);
-        for (size_t i=0; i<keys->Length(); ++i) {
-            mrb_value k = jsobj2ruby(mrb, keys->Get(i));
-            mrb_value v = jsobj2ruby(mrb, jsobj->Get(keys->Get(i)));
-            mrb_hash_set(mrb, hash, k, v);
-        }
-        return hash;
-        */
         struct RClass *c = reinterpret_cast<NodeMRuby*>(mrb->ud)->mruby_node_object_class_;
         NodeMRubyValueContainer * vc = new NodeMRubyValueContainer(val);
         return mrb_obj_value(Data_Wrap_Struct(mrb, c, &node_mruby_function_data_type, vc));
@@ -340,11 +331,8 @@ static mrb_value node_require(mrb_state *mrb, mrb_value self) {
     Handle<Value> args[] = {arg0};
     Handle<v8::Object> jsself = Object::New();
     Handle<Value> retval = NodeMRuby::require->Call(jsself, 1, args);
-    std::cerr << "LOAD" << std::endl;
     if (*retval) {
-    std::cerr << "converting" << std::endl;
         mrb_value ret = jsobj2ruby(mrb, retval);
-    std::cerr << "converted" << std::endl;
         mrb_p(mrb, ret);
         return ret;
     } else {
@@ -364,6 +352,40 @@ static mrb_value node_eval(mrb_state *mrb, mrb_value self) {
         return jsobj2ruby(mrb, retval);
     } else {
         return mrb_undef_value();
+    }
+}
+
+inline mrb_value mrb_sym_to_s(mrb_state *mrb, mrb_value sym) {
+    mrb_sym id = SYM2ID(sym);
+    int len;
+
+    const char *p = mrb_sym2name_len(mrb, id, &len);
+    return mrb_str_new(mrb, p, len);
+}
+
+static mrb_value node_object_method_missing(mrb_state *mrb, mrb_value self) {
+    int alen;
+    mrb_value name, *a;
+
+    mrb_get_args(mrb, "o*", &name, &a, &alen);
+    if (!SYMBOL_P(name)) {
+        mrb_raise(mrb, E_TYPE_ERROR, "name should be a symbol");
+    }
+
+    Handle<Object> jsobj = ((NodeMRubyValueContainer*)mrb_get_datatype(mrb, self, &node_mruby_function_data_type))->v_->ToObject();
+    mrb_value rsName = mrb_sym_to_s(mrb, name);
+    Handle<String> hsName = String::New(RSTRING_PTR(rsName), RSTRING_LEN(rsName));
+    Handle<Value> elem = jsobj->Get(hsName);
+    if (elem->IsFunction()) {
+        Handle<Value> *args = new Handle<Value>[alen];
+        for (int i=0; i<alen; i++) {
+            args[i] = rubyobj2js(mrb, a[i]);
+        }
+        Local<Value> retval = Function::Cast(*elem)->Call(jsobj, alen, args);
+        delete []args;
+        return jsobj2ruby(mrb, retval);
+    } else {
+        return jsobj2ruby(mrb, elem);
     }
 }
 
