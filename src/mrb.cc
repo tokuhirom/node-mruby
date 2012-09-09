@@ -218,7 +218,11 @@ static Handle<Value> rubyobj2js(mrb_state *mrb, const mrb_value &v) {
     HandleScope scope;
     switch (mrb_type(v)) {
     case MRB_TT_FALSE:
-        return scope.Close(Boolean::New(false));
+        if (mrb_nil_p(v)) {
+            return scope.Close(v8::Null());
+        } else {
+            return scope.Close(Boolean::New(false));
+        }
     case MRB_TT_TRUE:
         return scope.Close(Boolean::New(true));
     case MRB_TT_FIXNUM:
@@ -298,7 +302,7 @@ inline static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val) {
     } else if (val->IsNull()) {
         return mrb_nil_value();
     } else if (val->IsUndefined()) {
-        return mrb_nil_value();
+        return mrb_nil_value(); // TODO: I want to return undef here, but it causes segv. why?
     } else if (val->IsString()) {
         v8::String::Utf8Value u8val(val);
         return mrb_str_new(mrb, *u8val, u8val.length());

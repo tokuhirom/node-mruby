@@ -8,8 +8,6 @@ test(function (t) {
         var mruby = new mRuby();
         t.equivalent(mruby.loadString('NodeJS.eval("false")'), false);
         t.equivalent(mruby.loadString('NodeJS.eval("true")'), true);
-        console.log(mruby.loadString('p NodeJS.eval("undefined")'));
-        console.log(mruby.loadString('NodeJS.eval("undefined")'));
         t.equivalent(mruby.loadString('NodeJS.eval("undefined")'), null);
         t.equivalent(mruby.loadString('NodeJS.eval(%q{"xxx"})'), 'xxx');
         t.equivalent(mruby.loadString('NodeJS.eval(%q{[]})'), []);
