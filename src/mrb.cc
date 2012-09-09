@@ -535,8 +535,6 @@ inline mrb_value mrb_sym_to_s(mrb_state *mrb, mrb_value sym) {
 
 // NodeJS::Object#method_missing
 static mrb_value node_object_method_missing(mrb_state *mrb, mrb_value self) {
-    HandleScope scope;
-
     int alen;
     mrb_value name, *a, b;
 
@@ -545,7 +543,6 @@ static mrb_value node_object_method_missing(mrb_state *mrb, mrb_value self) {
 
     mrb_get_args(mrb, "o*&", &name, &a, &alen, &b);
     std::cerr << "[DEBUG] object#method_missing with arguments: " << alen << " " << (!mrb_nil_p(b) ? "with" : "without") << " block" << std::endl;
-    mrb_p(mrb, name);
     if (!SYMBOL_P(name)) {
         mrb_raise(mrb, E_TYPE_ERROR, "name should be a symbol");
     }
@@ -570,13 +567,11 @@ static mrb_value node_object_method_missing(mrb_state *mrb, mrb_value self) {
         delete []args;
         if (*retval) {
             mrb_value ret =  jsobj2ruby(mrb, retval);
-            scope.Close(Undefined());
             return ret;
         } else { // got exception
             DBG("JS LEVEL Exception");
             // TODO: better exception
             mrb_raise(mrb, E_RUNTIME_ERROR, "Got js exception");
-            scope.Close(Undefined());
             return mrb_undef_value(); // should not reach here
         }
     } else {
@@ -584,7 +579,6 @@ static mrb_value node_object_method_missing(mrb_state *mrb, mrb_value self) {
         // mrb_p(mrb, jsobj2ruby(mrb, elem));
         jsobjdump(jsobj);
         mrb_value ret =  jsobj2ruby(mrb, elem);
-        scope.Close(Undefined());
         return ret;
     }
 }
