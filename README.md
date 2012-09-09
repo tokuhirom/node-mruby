@@ -19,6 +19,7 @@ TODO
 
   * write a node.js library in ruby, and export classes/functions as npm library.
   * use callback function
+  * better diag for syntax error in node.js level
 
 BUGS
 ----
