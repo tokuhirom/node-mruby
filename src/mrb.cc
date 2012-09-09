@@ -9,6 +9,7 @@
 #include "mruby/hash.h"
 #include "mruby/khash.h"
 #include "mruby/proc.h"
+#include "mruby/data.h"
 #include "mruby/string.h"
 #include "mruby/variable.h"
 
@@ -22,9 +23,20 @@ KHASH_DECLARE(ht, mrb_value, mrb_value, 1);
 static Handle<Value> rubyobj2js(mrb_state*mrb, const mrb_value &v);
 static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val);
 
-struct NodeRubyContext {
-    Handle<FunctionTemplate> ft;
+struct NodeMRubyValueContainer {
+    Handle<Value> v_;
+    NodeMRubyValueContainer(Handle<Value> v) : v_(v) { }
 };
+
+static void node_mruby_value_container_free(mrb_state * mrb, void* data) {
+    struct NodeMRubyValueContainer* d = static_cast<struct NodeMRubyValueContainer*>(data);
+    delete d;
+}
+
+static const struct mrb_data_type node_mruby_function_data_type = {
+    "mruby_function", node_mruby_value_container_free
+};
+
 
 static mrb_value node_require(mrb_state *mrb, mrb_value self);
 static mrb_value node_eval(mrb_state *mrb, mrb_value self);
@@ -269,6 +281,10 @@ static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val) {
         return mrb_true_value();
     } else if (val->IsFalse()) {
         return mrb_false_value();
+    } else if (val->IsNull()) {
+        return mrb_undef_value();
+    } else if (val->IsUndefined()) {
+        return mrb_undef_value();
     } else if (val->IsString()) {
         v8::String::Utf8Value u8val(val);
         return mrb_str_new(mrb, *u8val, u8val.length());
@@ -279,8 +295,13 @@ static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val) {
             mrb_ary_push(mrb, retval, jsobj2ruby(mrb, jsav->Get(i)));
         }
         return retval;
+    } else if (val->IsFunction()) {
+        struct RClass *c = mrb_define_class(mrb, "MRuby::Function", mrb->object_class);
+        NodeMRubyValueContainer * vc = new NodeMRubyValueContainer(val);
+        return mrb_obj_value(Data_Wrap_Struct(mrb, c, &node_mruby_function_data_type, vc));
     } else if (val->IsObject()) {
         // if (NodePerlObject::constructor_template->HasInstance(jsobj)) {
+        /*
         Handle<Object> jsobj = Handle<Object>::Cast(val);
         Handle<Array> keys = jsobj->GetOwnPropertyNames();
         mrb_value hash = mrb_hash_new(mrb);
@@ -290,6 +311,10 @@ static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val) {
             mrb_hash_set(mrb, hash, k, v);
         }
         return hash;
+        */
+        struct RClass *c = mrb_define_class(mrb, "MRuby::Object", mrb->object_class);
+        NodeMRubyValueContainer * vc = new NodeMRubyValueContainer(val);
+        return mrb_obj_value(Data_Wrap_Struct(mrb, c, &node_mruby_function_data_type, vc));
     } else if (val->IsInt32()) {
         return mrb_fixnum_value(val->Int32Value());
     } else if (val->IsUint32()) {
@@ -310,7 +335,16 @@ static mrb_value node_require(mrb_state *mrb, mrb_value self) {
     Handle<Value> args[] = {arg0};
     Handle<v8::Object> jsself = Object::New();
     Handle<Value> retval = NodeMRuby::require->Call(jsself, 1, args);
-    return jsobj2ruby(mrb, retval);
+    std::cerr << "LOAD" << std::endl;
+    if (*retval) {
+    std::cerr << "converting" << std::endl;
+        mrb_value ret = jsobj2ruby(mrb, retval);
+    std::cerr << "converted" << std::endl;
+        mrb_p(mrb, ret);
+        return ret;
+    } else {
+        return mrb_undef_value();
+    }
 }
 
 static mrb_value node_eval(mrb_state *mrb, mrb_value self) {
