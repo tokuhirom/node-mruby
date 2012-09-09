@@ -75,7 +75,7 @@ struct NodeMRubyUDContext {
     }
 private:
     static void WeakCallback (v8::Persistent<v8::Value> value, void *data) {
-        NodeMRubyUDContext *obj = static_cast<NodeMRubyUDContext*>(data);
+        // NodeMRubyUDContext *obj = static_cast<NodeMRubyUDContext*>(data);
         // assert(value == obj->nmrb_);
         // assert(!obj->refs_);
         assert(value.IsNearDeath());
@@ -240,6 +240,21 @@ public:
 
 #undef MRB_
 #undef VALUE_
+
+class NodeMRubyLoadTest : ObjectWrap {
+public:
+    static void Init(Handle<Object> target) {
+        NODE_SET_METHOD(target, "loadTestOpenClose", NodeMRubyLoadTest::openClose);
+    }
+    static Handle<Value> openClose(const Arguments& args) {
+        HandleScope scope;
+        while (1) {
+            mrb_state *mrb = mrb_open();
+            mrb_close(mrb);
+        }
+        return scope.Close(Undefined());
+    }
+};
 
 #define MRB_   (Unwrap<NodeMRuby>(args.This())->mrb_)
 #define CXT_   (Unwrap<NodeMRuby>(args.This())->cxt_)
@@ -679,6 +694,7 @@ extern "C" void init(Handle<Object> target) {
     NodeMRuby::Init(target);
     NodeMRubyObject::Init(target);
     NodeMRubyFunctionInner::Init(target);
+    NodeMRubyLoadTest::Init(target);
     // NodeMRubyFunction::Init(target);
 }
 
