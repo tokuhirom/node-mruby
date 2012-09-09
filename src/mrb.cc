@@ -16,11 +16,14 @@
 using namespace v8;
 using namespace node;
 
+#define DBG(str) std::cerr << str << std::endl
+
 // TODO: mrb_define_global_const(mrb, "ARGV", ARGV);
 
 KHASH_DECLARE(ht, mrb_value, mrb_value, 1);
 
 static Handle<Value> rubyobj2js(mrb_state*mrb, const mrb_value &v);
+static Handle<Value> rubyobj2js(mrb_state*mrb, const mrb_value &v, Handle<Function> object_constructor);
 static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val);
 
 struct NodeMRubyValueContainer {
@@ -148,14 +151,17 @@ public:
         cxt_ = mrbc_context_new(mrb_);
         assert(cxt_);
 
+        // define NodeJS class.
         RClass * s = mrb_define_class(mrb_, "NodeJS", mrb_->object_class);
         mrb_define_class_method(mrb_, s, "require", node_require,      ARGS_REQ(1));
         mrb_define_class_method(mrb_, s, "eval",    node_eval,         ARGS_REQ(1));
 
+        // define NodeJS::Object class.
         this->mruby_node_object_class_ = mrb_define_class(mrb_, "NodeJS::Object", mrb_->object_class);
         MRB_SET_INSTANCE_TT(this->mruby_node_object_class_, MRB_TT_DATA);
         mrb_define_method(mrb_, this->mruby_node_object_class_, "method_missing", node_object_method_missing, ARGS_ANY());
 
+        // define NodeJS::Function class.
         this->mruby_node_function_class_ = mrb_define_class(mrb_, "NodeJS::Function", this->mruby_node_object_class_);
         mrb_define_method(mrb_, this->mruby_node_object_class_, "call", node_function_call, ARGS_ANY());
 
@@ -178,6 +184,11 @@ public:
 
         ARG_STR(0, src);
 
+        // after calling mrb_load_string_cxt, NodeMRubyObject::constructor_template->GetFunction() returns NULL value.
+        // This is a workaround for it.
+        // If you can fix this issue, make it this code as simpler.
+        Local<Function> object_constructor = NodeMRubyObject::constructor_template->GetFunction();
+
         mrbc_filename(MRB_, CXT_, "-e");
 
         mrb_value result = mrb_load_string_cxt(MRB_, *src, CXT_);
@@ -185,7 +196,7 @@ public:
         if (MRB_->exc) {
             mrb_value val = mrb_obj_value(MRB_->exc);
             mrb_p(MRB_, val);
-            return ThrowException(rubyobj2js(MRB_, val));
+            return ThrowException(rubyobj2js(MRB_, val, object_constructor));
         } else {
             return scope.Close(rubyobj2js(MRB_, result));
         }
@@ -193,6 +204,11 @@ public:
 
     static Handle<Value> loadFile(const Arguments& args) {
         HandleScope scope;
+
+        // after calling mrb_load_string_cxt, NodeMRubyObject::constructor_template->GetFunction() returns NULL value.
+        // This is a workaround for it.
+        // If you can fix this issue, make it this code as simpler.
+        Local<Function> object_constructor = NodeMRubyObject::constructor_template->GetFunction();
 
         ARG_STR(0, fname);
 
@@ -205,7 +221,7 @@ public:
         mrb_value result = mrb_load_file_cxt(MRB_, fp, CXT_);
         if (MRB_->exc) {
             mrb_value val = mrb_obj_value(MRB_->exc);
-            return ThrowException(rubyobj2js(MRB_, val));
+            return ThrowException(rubyobj2js(MRB_, val, object_constructor));
         } else {
             return scope.Close(rubyobj2js(MRB_, result));
         }
@@ -215,6 +231,10 @@ public:
 #undef MRB_
 
 static Handle<Value> rubyobj2js(mrb_state *mrb, const mrb_value &v) {
+    Local<Function> func = NodeMRubyObject::constructor_template->GetFunction();
+    return rubyobj2js(mrb, v, func);
+}
+static Handle<Value> rubyobj2js(mrb_state *mrb, const mrb_value &v, Handle<Function> object_constructor) {
     HandleScope scope;
     switch (mrb_type(v)) {
     case MRB_TT_FALSE:
@@ -283,12 +303,13 @@ static Handle<Value> rubyobj2js(mrb_state *mrb, const mrb_value &v) {
         mrb_value * vvv = (mrb_value*)malloc(sizeof(mrb_value));
         *vvv = v;
 
+        assert(mrb);
+        assert(vvv);
         Local<Value> arg0 = External::New(mrb);
         Local<Value> arg1 = External::New(vvv);
         Local<Value> args[] = {arg0, arg1};
-        return scope.Close(
-            NodeMRubyObject::constructor_template->GetFunction()->NewInstance(2, args)
-        );
+        Local<Value> ret = object_constructor->NewInstance(2, args);
+        return scope.Close(ret);
     }
     }
     return ThrowException(Exception::Error(String::New("[node-mruby] Unknown object type")));
@@ -314,7 +335,6 @@ inline static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val) {
         }
         return retval;
     } else if (val->IsFunction()) {
-        std::cerr << "FUNC!" << std::endl;
         struct RClass *c = reinterpret_cast<NodeMRuby*>(mrb->ud)->mruby_node_function_class_;
         NodeMRubyValueContainer * vc = new NodeMRubyValueContainer(val);
         return mrb_obj_value(Data_Wrap_Struct(mrb, c, &node_mruby_function_data_type, vc));
@@ -329,6 +349,7 @@ inline static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val) {
     } else if (val->IsNumber()) {
         return mrb_float_value(val->NumberValue());
     } else {
+        // TODO: better exception
         std::cerr << "OOOOOPS!" << std::endl;
         ThrowException(Exception::Error(String::New("Unknown type")));
     }
@@ -394,7 +415,13 @@ static mrb_value node_object_method_missing(mrb_state *mrb, mrb_value self) {
         }
         Local<Value> retval = Function::Cast(*elem)->Call(jsobj, alen, args);
         delete []args;
-        return jsobj2ruby(mrb, retval);
+        if (*retval) {
+            return jsobj2ruby(mrb, retval);
+        } else { // got exception
+            // TODO: better exception
+            mrb_raise(mrb, E_RUNTIME_ERROR, "Got js exception");
+            return mrb_undef_value(); // should not reach here
+        }
     } else {
         return jsobj2ruby(mrb, elem);
     }
