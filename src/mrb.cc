@@ -60,16 +60,26 @@ struct NodeMRubyUDContext {
 
     NodeMRubyUDContext(Handle<Object> nmrb) {
         nmrb_ = Persistent<Object>::New(nmrb);
+        nmrb_.MakeWeak(this, WeakCallback);
+        nmrb_.MarkIndependent();
+    }
+    ~NodeMRubyUDContext() {
+        TRACE_DESTRUCTOR("NodeMRubyUDContext");
+        nmrb_.Dispose();
+        nmrb_.Clear();
     }
     struct RClass *mruby_node_function_class();
     struct RClass *mruby_node_object_class();
     Handle<Object> nmrb() {
         return nmrb_;
     }
-    ~NodeMRubyUDContext() {
-        TRACE_DESTRUCTOR("NodeMRubyUDContext");
-        nmrb_.Dispose();
-        nmrb_.Clear();
+private:
+    static void WeakCallback (v8::Persistent<v8::Value> value, void *data) {
+        NodeMRubyUDContext *obj = static_cast<NodeMRubyUDContext*>(data);
+        // assert(value == obj->nmrb_);
+        // assert(!obj->refs_);
+        assert(value.IsNearDeath());
+        // delete obj;
     }
 };
 
@@ -297,11 +307,10 @@ public:
     }
     ~NodeMRuby() {
         TRACE_DESTRUCTOR("NodeMRuby");
-        if (mrb_) {
-            delete reinterpret_cast<NodeMRubyUDContext*>(mrb_->ud);
-            mrbc_context_free(mrb_, cxt_);
-            mrb_close(mrb_);
-        }
+        NodeMRubyUDContext* udc = reinterpret_cast<NodeMRubyUDContext*>(mrb_->ud);
+        delete udc;
+        mrbc_context_free(mrb_, cxt_);
+        mrb_close(mrb_);
     }
     static Handle<Value> init(const Arguments& args) {
         HandleScope scope;
