@@ -18,8 +18,8 @@ TODO
 ----
 
   * write a node.js library in ruby, and export classes/functions as npm library.
-  * use callback function
   * better diag for syntax error in node.js level
+  * inject object from node.js world to ruby world
 
 BUGS
 ----
@@ -35,4 +35,18 @@ Following code makes assertion error. I don't know why it caused.
         mrb_value result = mrb_load_string_cxt(MRB_, *src, CXT_);
         Local<Function> func = NodeMRubyObject::constructor_template->GetFunction();
         assert(*func);
+
+### segv
+
+    tap = NodeJS.require('tap')
+    fs = NodeJS.require('fs')
+    puts("---READY")
+    tap.test {|t|
+        puts("---READY")
+        NodeJS.eval('console.log("hoge")')
+        fs.readFile('hoge.js', 'utf-8') {|err, content|
+            NodeJS.eval('console.log("hoge")')
+            t.end()
+        }
+    }
 

@@ -4,6 +4,7 @@
 #include <node.h>
 #include <node_buffer.h>
 #include <v8.h>
+#include <iostream>
 
 /* ******************************************************
  * exception utilities
@@ -63,3 +64,48 @@
                 Integer::New(_value), \
                 static_cast<PropertyAttribute>(ReadOnly|DontDelete))
 
+#ifndef DEBUGGING
+inline static void jsobjdump(v8::Handle<v8::Value> val, int n=0) {
+    for (int i=0; i<n; i++) {
+        std::cerr << " ";
+    }
+    if (val->IsTrue()) {
+        std::cerr << "true" << std::endl;
+    } else if (val->IsFalse()) {
+        std::cerr << "false" << std::endl;
+    } else if (val->IsNull()) {
+        std::cerr << "null" << std::endl;
+    } else if (val->IsUndefined()) {
+        std::cerr << "undefined" << std::endl;
+    } else if (val->IsString()) {
+        v8::String::Utf8Value u8val(val);
+        std::cerr << *u8val << std::endl;
+    } else if (val->IsArray()) {
+        v8::Handle<v8::Array> jsav = v8::Handle<v8::Array>::Cast(val);
+        for (size_t i=0; i<jsav->Length(); ++i) {
+            jsobjdump(jsav->Get(i), n+1);
+        }
+    } else if (val->IsFunction()) {
+        std::cerr << "[Function]" << std::endl;
+    } else if (val->IsObject()) {
+        v8::Handle<v8::Object> jsobj = v8::Handle<v8::Object>::Cast(val);
+        v8::Handle<v8::Array> keys = jsobj->GetPropertyNames();
+        std::cerr << "[Object" << std::endl;
+        for (size_t i=0; i<keys->Length(); ++i) {
+            jsobjdump(keys->Get(i), n+1);
+            jsobjdump(jsobj->Get(keys->Get(i)), n+1);
+        }
+        std::cerr << "]" << std::endl;
+    } else if (val->IsInt32()) {
+        std::cerr << "[Int32 " << val->Int32Value() << "]" << std::endl;
+    } else if (val->IsUint32()) {
+        std::cerr << "[UInt32 " << val->Uint32Value() << "]" << std::endl;
+    } else if (val->IsNumber()) {
+        std::cerr << "[Number " << val->NumberValue() << "]" << std::endl;
+    } else {
+        std::cerr << "[Unknown]" << std::endl;
+    }
+}
+#else
+inline static void jsobjdump(v8::Handle<v8::Value> val) { }
+#endif

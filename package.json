@@ -6,7 +6,9 @@
   "directories": {
     "test": "test"
   },
-  "dependencies": {},
+  "dependencies": {
+    "heredoc": "~0.0.2"
+  },
   "devDependencies": {
     "tap": "~0.3.1"
   },
