@@ -220,7 +220,9 @@ public:
 
         mrb_value result = mrb_load_file_cxt(MRB_, fp, CXT_);
         if (MRB_->exc) {
+            DBG("--- Got mruby level exception in loadFile");
             mrb_value val = mrb_obj_value(MRB_->exc);
+            mrb_p(MRB_, val);
             return ThrowException(rubyobj2js(MRB_, val, object_constructor));
         } else {
             return scope.Close(rubyobj2js(MRB_, result));
@@ -297,9 +299,20 @@ static Handle<Value> rubyobj2js(mrb_state *mrb, const mrb_value &v, Handle<Funct
     case MRB_TT_MODULE:
     case MRB_TT_ICLASS:
     case MRB_TT_SCLASS:
-    case MRB_TT_PROC:
     case MRB_TT_FREE:
     case MRB_TT_RANGE: {
+        mrb_value * vvv = (mrb_value*)malloc(sizeof(mrb_value));
+        *vvv = v;
+
+        assert(mrb);
+        assert(vvv);
+        Local<Value> arg0 = External::New(mrb);
+        Local<Value> arg1 = External::New(vvv);
+        Local<Value> args[] = {arg0, arg1};
+        Local<Value> ret = object_constructor->NewInstance(2, args);
+        return scope.Close(ret);
+    }
+    case MRB_TT_PROC: {
         mrb_value * vvv = (mrb_value*)malloc(sizeof(mrb_value));
         *vvv = v;
 
@@ -395,11 +408,13 @@ inline mrb_value mrb_sym_to_s(mrb_state *mrb, mrb_value sym) {
     return mrb_str_new(mrb, p, len);
 }
 
+// NodeJS::Object#method_missing
 static mrb_value node_object_method_missing(mrb_state *mrb, mrb_value self) {
     int alen;
-    mrb_value name, *a;
+    mrb_value name, *a, b;
 
-    mrb_get_args(mrb, "o*", &name, &a, &alen);
+    mrb_get_args(mrb, "o*&", &name, &a, &alen, &b);
+    std::cerr << "[DEBUG] object#method_missing with arguments: " << alen << std::endl;
     if (!SYMBOL_P(name)) {
         mrb_raise(mrb, E_TYPE_ERROR, "name should be a symbol");
     }
@@ -409,11 +424,15 @@ static mrb_value node_object_method_missing(mrb_state *mrb, mrb_value self) {
     Handle<String> hsName = String::New(RSTRING_PTR(rsName), RSTRING_LEN(rsName));
     Handle<Value> elem = jsobj->Get(hsName);
     if (elem->IsFunction()) {
-        Handle<Value> *args = new Handle<Value>[alen];
+        int alen2 = alen + ( mrb_nil_p(b) ? 0 : 1 );
+        Handle<Value> *args = new Handle<Value>[alen2];
         for (int i=0; i<alen; i++) {
             args[i] = rubyobj2js(mrb, a[i]);
         }
-        Local<Value> retval = Function::Cast(*elem)->Call(jsobj, alen, args);
+        if (!mrb_nil_p(b)) {
+            args[alen] = rubyobj2js(mrb, b);
+        }
+        Local<Value> retval = Function::Cast(*elem)->Call(jsobj, alen2, args);
         delete []args;
         if (*retval) {
             return jsobj2ruby(mrb, retval);
@@ -427,6 +446,7 @@ static mrb_value node_object_method_missing(mrb_state *mrb, mrb_value self) {
     }
 }
 
+// function#call
 static mrb_value node_function_call(mrb_state *mrb, mrb_value self) {
     int alen;
     mrb_value name, *a;
