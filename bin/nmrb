@@ -1,0 +1,68 @@
+#!/usr/bin/env node
+"use strict";
+
+var fs = require('fs'),
+    readline = require('readline'),
+    tty = require('tty'),
+    mRuby = require('../index.js'),
+    mruby = new mRuby();
+
+var optimist = require('optimist')
+    .usage('Usage: $0 -e eval')
+    .alias('h', 'help').describe('h', 'show this help message')
+    ;
+var argv = optimist.argv;
+
+if (argv.h) {
+    console.log(optimist.help());
+    process.exit(0);
+}
+
+if (typeof argv.e !== 'undefined') {
+    // -e  means eval mode
+    var src = '' + argv.e;
+    global.ARGV = argv._;
+    mruby.loadString(src);
+} else if (argv._.length > 0) {
+    var fname = argv._[0];
+    global.ARGV = argv._.slice(1);
+    mruby.loadFile(fname);
+} else if (tty.isatty(process.stdin.fd)) {
+    global.ARGV = argv._;
+
+    var rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+    });
+
+    rl.setPrompt('✖╹◡╹✖  ☆☆☆ ');
+    rl.prompt();
+    rl.on('line', function(src) {
+        try {
+            console.log(mruby.loadString(''+src.trim()));
+        } catch (e) { console.log(e); }
+        rl.prompt();
+    }).on('close', function () {
+        process.exit(0);
+    });
+} else {
+    (function () {
+        var fname = argv._[0];
+        global.ARGV = argv._;
+        var fs = require("fs");
+
+        var fd = process.stdin.fd;
+
+        var content = "";
+        var BUFFER_SIZE = 4096;
+        var buffer = new Buffer(BUFFER_SIZE);
+        var n;
+
+        while( (n = fs.readSync(fd, buffer, 0, BUFFER_SIZE)) > 0) {
+                content += buffer.slice(0, n).toString();
+        }
+
+        mruby.loadString(content);
+    })();
+}
+

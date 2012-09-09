@@ -50,3 +50,7 @@ Following code makes assertion error. I don't know why it caused.
         }
     }
 
+### path for require
+
+path for require is not based on .rb file.
+
