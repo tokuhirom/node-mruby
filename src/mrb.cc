@@ -24,6 +24,7 @@ KHASH_DECLARE(ht, mrb_value, mrb_value, 1);
 
 static Handle<Value> rubyobj2js(mrb_state*mrb, const mrb_value &v);
 static Handle<Value> rubyobj2js(mrb_state*mrb, const mrb_value &v, Handle<Function> object_constructor);
+static Handle<Value> rubyproc2jsfunc(mrb_state*mrb, const mrb_value &v);
 static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val);
 
 struct NodeMRubyValueContainer {
@@ -48,6 +49,102 @@ static mrb_value node_require(mrb_state *mrb, mrb_value self);
 static mrb_value node_eval(mrb_state *mrb, mrb_value self);
 static mrb_value node_object_method_missing(mrb_state *mrb, mrb_value self);
 static mrb_value node_function_call(mrb_state *mrb, mrb_value self);
+
+/**
+ * Container class for mRuby level callback function.
+ */
+class NodeMRubyFunctionInner : ObjectWrap {
+public:
+    static Persistent<FunctionTemplate> constructor_template;
+
+    struct Callback {
+        mrb_state *mrb;
+        mrb_value callback;
+        Callback(mrb_state* m, const mrb_value &c) : mrb(m), callback(c) { }
+    };
+
+    Callback * cb_;
+
+    static void Init(Handle<Object> target) {
+        DBG("NodeMRubyFunctionNner::Init");
+        Local<FunctionTemplate> t = FunctionTemplate::New(NodeMRubyFunctionInner::New);
+        constructor_template = Persistent<FunctionTemplate>::New(t);
+        constructor_template->SetClassName(String::NewSymbol("mRubyFunctionInner"));
+
+        Local<ObjectTemplate> instance_template = constructor_template->InstanceTemplate();
+        instance_template->SetInternalFieldCount(1);
+    }
+
+    static Handle<Value> New(const Arguments& args) {
+        HandleScope scope;
+
+        if (!args.IsConstructCall())
+            return args.Callee()->NewInstance();
+
+        DBG("NodeMRubyFunctionNner::New");
+        ARG_EXT(0, jscb);
+        Callback *cb = static_cast<Callback*>(jscb->Value());
+        (new NodeMRubyFunctionInner(cb))->Wrap(args.Holder());
+        return scope.Close(args.Holder());
+    }
+    NodeMRubyFunctionInner(Callback * cb) : cb_(cb) { }
+    ~NodeMRubyFunctionInner() { delete cb_; }
+};
+
+class NodeMRubyFunction : ObjectWrap {
+public:
+    static Persistent<FunctionTemplate> constructor_template;
+
+    struct Callback {
+        mrb_value callback;
+    };
+    inline void Wrap2 (v8::Handle<v8::Object> handle) {
+        this->Wrap(handle);
+    }
+
+    /*
+    static void Init(Handle<Object> target) {
+        Local<FunctionTemplate> t = FunctionTemplate::New(NodeMRubyFunction::Call);
+        constructor_template = Persistent<FunctionTemplate>::New(t);
+        constructor_template->SetClassName(String::NewSymbol("mRubyFunction"));
+
+        Local<ObjectTemplate> instance_template = constructor_template->InstanceTemplate();
+        instance_template->SetInternalFieldCount(1);
+    }
+    */
+
+    static Handle<Value> Call(const Arguments& args) {
+        HandleScope scope;
+
+        /*
+        if (!args.IsConstructCall())
+            return args.Callee()->NewInstance();
+        */
+
+        DBG("NodeMRubyFunction::New");
+        Local<Value> jsinner = args.Callee()->Get(0);
+        assert(jsinner->IsObject());
+        NodeMRubyFunctionInner::Callback * cbstruct  = Unwrap<NodeMRubyFunctionInner>(jsinner->ToObject())->cb_;
+        std::cerr << args.Length() << std::endl;
+        mrb_p(cbstruct->mrb, cbstruct->callback);
+
+        mrb_value retval;
+        if (args.Length() == 1) {
+            // optimize
+            retval = mrb_yield(cbstruct->mrb, cbstruct->callback, cbstruct->callback);
+        } else {
+            // TODO: optimize the pattern when 2 args.
+            mrb_value * argv = new mrb_value[args.Length()];
+            for (int i=0; i<args.Length(); i++) {
+                argv[i] = jsobj2ruby(cbstruct->mrb, args[i]);
+            }
+            retval = mrb_yield_argv(cbstruct->mrb, cbstruct->callback, args.Length(), argv);
+            delete []argv;
+        }
+
+        return scope.Close(rubyobj2js(cbstruct->mrb, retval));
+    }
+};
 
 #define VALUE_ (Unwrap<NodeMRubyObject>(args.This())->value_)
 #define MRB_   (Unwrap<NodeMRubyObject>(args.This())->mrb_)
@@ -430,7 +527,7 @@ static mrb_value node_object_method_missing(mrb_state *mrb, mrb_value self) {
             args[i] = rubyobj2js(mrb, a[i]);
         }
         if (!mrb_nil_p(b)) {
-            args[alen] = rubyobj2js(mrb, b);
+            args[alen] = rubyproc2jsfunc(mrb, b);
         }
         Local<Value> retval = Function::Cast(*elem)->Call(jsobj, alen2, args);
         delete []args;
@@ -449,7 +546,7 @@ static mrb_value node_object_method_missing(mrb_state *mrb, mrb_value self) {
 // function#call
 static mrb_value node_function_call(mrb_state *mrb, mrb_value self) {
     int alen;
-    mrb_value name, *a;
+    mrb_value *a;
 
     mrb_get_args(mrb, "*", &a, &alen);
     Handle<Object> jsobj = ((NodeMRubyValueContainer*)mrb_get_datatype(mrb, self, &node_mruby_function_data_type))->v_->ToObject();
@@ -463,13 +560,39 @@ static mrb_value node_function_call(mrb_state *mrb, mrb_value self) {
     return jsobj2ruby(mrb, retval);
 }
 
+static Handle<Value> rubyproc2jsfunc(mrb_state*mrb, const mrb_value &v) {
+    HandleScope scope;
+    DBG("PROC2JS");
+    // get a instance of NodeMRubyFunctionInner
+    Local<Value> arg0 = External::New(new NodeMRubyFunctionInner::Callback(mrb, v));
+    Local<Value> args[] = {arg0};
+    Local<Object> inner = NodeMRubyFunctionInner::constructor_template->GetFunction()->NewInstance(1, args);
+
+    DBG("Ready to create function");
+    Local<FunctionTemplate> t = FunctionTemplate::New(NodeMRubyFunction::Call);
+    Local<ObjectTemplate> instance_template = t->InstanceTemplate();
+    instance_template->SetInternalFieldCount(1);
+    Local<Function> func = t->GetFunction();
+    func->Set(0, inner);
+    DBG("-- generated");
+    return scope.Close(func);
+    // return scope.Close(Undefined());
+}
+
+/**
+ * Static global variables.
+ */
 Persistent<FunctionTemplate> NodeMRuby::constructor_template;
 Persistent<FunctionTemplate> NodeMRubyObject::constructor_template;
+// Persistent<FunctionTemplate> NodeMRubyFunction::constructor_template;
+Persistent<FunctionTemplate> NodeMRubyFunctionInner::constructor_template;
 Persistent<Function> NodeMRuby::require;
 Persistent<Function> NodeMRuby::eval;
 
 extern "C" void init(Handle<Object> target) {
     NodeMRuby::Init(target);
     NodeMRubyObject::Init(target);
+    NodeMRubyFunctionInner::Init(target);
+    // NodeMRubyFunction::Init(target);
 }
 
