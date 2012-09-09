@@ -13,6 +13,7 @@ preqreuirements
 
   * bison?
   * make?
+  * node.js 0.8.8 or later
 
 TODO
 ----
@@ -20,6 +21,7 @@ TODO
   * write a node.js library in ruby, and export classes/functions as npm library.
   * better diag for syntax error in node.js level
   * inject object from node.js world to ruby world
+  * save a instance of NodeMRuby to NodeMRubyObject
 
 BUGS
 ----
@@ -35,6 +37,8 @@ Following code makes assertion error. I don't know why it caused.
         mrb_value result = mrb_load_string_cxt(MRB_, *src, CXT_);
         Local<Function> func = NodeMRubyObject::constructor_template->GetFunction();
         assert(*func);
+
+It's not reproduce under node.js 0.8.8
 
 ### segv
 

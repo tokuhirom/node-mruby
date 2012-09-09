@@ -23,9 +23,10 @@ using namespace node;
 
 KHASH_DECLARE(ht, mrb_value, mrb_value, 1);
 
-static Handle<Value> rubyobj2js(mrb_state*mrb, const mrb_value &v);
-static Handle<Value> rubyobj2js(mrb_state*mrb, const mrb_value &v, Handle<Function> object_constructor);
+static Handle<Value> mrubyobj2js(Handle<Object> nmrb, const mrb_value &v);
+static Handle<Value> mrubyobj2js(mrb_state*mrb, const mrb_value &v);
 static Handle<Value> rubyproc2jsfunc(mrb_state*mrb, const mrb_value &v);
+static Handle<Object> mrb2nmrb(mrb_state* mrb);
 static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val);
 
 struct NodeMRubyValueContainer {
@@ -48,6 +49,28 @@ static void node_mruby_value_container_free(mrb_state * mrb, void* data) {
 
 static const struct mrb_data_type node_mruby_function_data_type = {
     "mruby_function", node_mruby_value_container_free
+};
+
+/**
+ * This is a container object to save a NodeMRuby object.
+ * This struct must be store in mrb->ud
+ */
+struct NodeMRubyUDContext {
+    Persistent<Object> nmrb_;
+
+    NodeMRubyUDContext(Handle<Object> nmrb) {
+        nmrb_ = Persistent<Object>::New(nmrb);
+    }
+    struct RClass *mruby_node_function_class();
+    struct RClass *mruby_node_object_class();
+    Handle<Object> nmrb() {
+        return nmrb_;
+    }
+    ~NodeMRubyUDContext() {
+        TRACE_DESTRUCTOR("NodeMRubyUDContext");
+        nmrb_.Dispose();
+        nmrb_.Clear();
+    }
 };
 
 
@@ -76,7 +99,7 @@ public:
     Callback * cb_;
 
     static void Init(Handle<Object> target) {
-        DBG("NodeMRubyFunctionNner::Init");
+        DBG("NodeMRubyFunctionInner::Init");
         Local<FunctionTemplate> t = FunctionTemplate::New(NodeMRubyFunctionInner::New);
         constructor_template = Persistent<FunctionTemplate>::New(t);
         constructor_template->SetClassName(String::NewSymbol("mRubyFunctionInner"));
@@ -128,30 +151,21 @@ public:
     static Handle<Value> Call(const Arguments& args) {
         HandleScope scope;
 
-        /*
-        if (!args.IsConstructCall())
-            return args.Callee()->NewInstance();
-        */
-
         DBG("NodeMRubyFunction::New");
         Local<Value> jsinner = args.Callee()->Get(0);
         assert(jsinner->IsObject());
         NodeMRubyFunctionInner::Callback * cbstruct  = Unwrap<NodeMRubyFunctionInner>(jsinner->ToObject())->cb_;
-        std::cerr << args.Length() << std::endl;
-        mrb_p(cbstruct->mrb, cbstruct->callback);
 
         // TODO: optimize for few arguments.
         mrb_value * argv = new mrb_value[args.Length()];
         for (int i=0; i<args.Length(); i++) {
             argv[i] = jsobj2ruby(cbstruct->mrb, args[i]);
         }
-        // mrb_funcall_argv(mrb_state *mrb, mrb_value self, mrb_sym mid, int argc, mrb_value *argv)
         mrb_sym mid = mrb_intern(cbstruct->mrb, "call");
         mrb_value retval = mrb_funcall_argv(cbstruct->mrb, cbstruct->callback, mid, args.Length(), argv);
-        // mrb_value retval = mrb_yield_argv(cbstruct->mrb, cbstruct->callback, args.Length(), argv);
         delete []argv;
 
-        return scope.Close(rubyobj2js(cbstruct->mrb, retval));
+        return scope.Close(mrubyobj2js(mrb2nmrb(cbstruct->mrb), retval));
     }
 };
 
@@ -162,6 +176,7 @@ class NodeMRubyObject : ObjectWrap {
 public:
     mrb_state* mrb_;
     mrb_value* value_;
+    Persistent<Object> nmrb_;
 
     static Persistent<FunctionTemplate> constructor_template;
 
@@ -184,17 +199,23 @@ public:
 
         ARG_EXT(0, jsmrb);
         ARG_EXT(1, jsval);
-
+        ARG_OBJ(2, nmrb);
         mrb_state *m = static_cast<mrb_state*>(jsmrb->Value());
         mrb_value *v = static_cast<mrb_value*>(jsval->Value());
-        (new NodeMRubyObject(m, v))->Wrap(args.Holder());
+        (new NodeMRubyObject(m, v, nmrb))->Wrap(args.Holder());
+
         return scope.Close(args.Holder());
     }
 
-    NodeMRubyObject(mrb_state* m, mrb_value* v) : mrb_(m), value_(v) {
+    NodeMRubyObject(mrb_state* m, mrb_value* v, Handle<Object> nmrb) : mrb_(m), value_(v) {
+        nmrb_ = Persistent<Object>::New(nmrb);
     }
     ~NodeMRubyObject() {
         TRACE_DESTRUCTOR("NodeMRubyObject");
+        if (*nmrb_) {
+            nmrb_.Dispose();
+            nmrb_.Clear();
+        }
         free(value_);
     }
 
@@ -202,7 +223,7 @@ public:
         HandleScope scope;
         mrb_value* val = VALUE_;
         mrb_value inspected = mrb_obj_inspect(MRB_, *val);
-        Handle<Value> retval = rubyobj2js(MRB_, inspected);
+        Handle<Value> retval = mrubyobj2js(MRB_, inspected);
         return scope.Close(retval);
     }
 };
@@ -245,11 +266,11 @@ public:
         if (!args.IsConstructCall())
             return args.Callee()->NewInstance();
 
-        (new NodeMRuby())->Wrap(args.Holder());
+        (new NodeMRuby(args.Holder()))->Wrap(args.Holder());
         return scope.Close(args.Holder());
     }
 
-    NodeMRuby() {
+    NodeMRuby(Handle<Object> nmrb) {
         mrb_ = mrb_open();
         if (!mrb_) {
             ThrowException(Exception::Error(String::New("Cannot create mrb_state")));
@@ -272,12 +293,15 @@ public:
         this->mruby_node_function_class_ = mrb_define_class(mrb_, "NodeJS::Function", this->mruby_node_object_class_);
         mrb_define_method(mrb_, this->mruby_node_object_class_, "call", node_function_call, ARGS_ANY());
 
-        mrb_->ud = this;
+        mrb_->ud = new NodeMRubyUDContext(nmrb);
     }
     ~NodeMRuby() {
         TRACE_DESTRUCTOR("NodeMRuby");
-        mrbc_context_free(mrb_, cxt_);
-        mrb_close(mrb_);
+        if (mrb_) {
+            delete reinterpret_cast<NodeMRubyUDContext*>(mrb_->ud);
+            mrbc_context_free(mrb_, cxt_);
+            mrb_close(mrb_);
+        }
     }
     static Handle<Value> init(const Arguments& args) {
         HandleScope scope;
@@ -294,11 +318,6 @@ public:
 
         ARG_STR(0, src);
 
-        // after calling mrb_load_string_cxt, NodeMRubyObject::constructor_template->GetFunction() returns NULL value.
-        // This is a workaround for it.
-        // If you can fix this issue, make it this code as simpler.
-        Local<Function> object_constructor = NodeMRubyObject::constructor_template->GetFunction();
-
         mrbc_filename(MRB_, CXT_, "-e");
 
         mrb_value result = mrb_load_string_cxt(MRB_, *src, CXT_);
@@ -306,19 +325,14 @@ public:
         if (MRB_->exc) {
             mrb_value val = mrb_obj_value(MRB_->exc);
             mrb_p(MRB_, val);
-            return ThrowException(rubyobj2js(MRB_, val, object_constructor));
+            return ThrowException(mrubyobj2js(args.This(), val));
         } else {
-            return scope.Close(rubyobj2js(MRB_, result));
+            return scope.Close(mrubyobj2js(args.This(), result));
         }
     }
 
     static Handle<Value> loadFile(const Arguments& args) {
         HandleScope scope;
-
-        // after calling mrb_load_string_cxt, NodeMRubyObject::constructor_template->GetFunction() returns NULL value.
-        // This is a workaround for it.
-        // If you can fix this issue, make it this code as simpler.
-        Local<Function> object_constructor = NodeMRubyObject::constructor_template->GetFunction();
 
         ARG_STR(0, fname);
 
@@ -333,20 +347,30 @@ public:
             DBG("--- Got mruby level exception in loadFile");
             mrb_value val = mrb_obj_value(MRB_->exc);
             mrb_p(MRB_, val);
-            return ThrowException(rubyobj2js(MRB_, val, object_constructor));
+            return ThrowException(mrubyobj2js(args.This(), val));
         } else {
-            return scope.Close(rubyobj2js(MRB_, result));
+            return scope.Close(mrubyobj2js(args.This(), result));
         }
+    }
+
+    /**
+     * Unwrap and get a data from outside
+     */
+    static struct RClass* GetFunctionClass(Handle<Object> self) {
+        return (Unwrap<NodeMRuby>(self)->mruby_node_function_class_);
+    }
+    static struct RClass* GetObjectClass(Handle<Object> self) {
+        return (Unwrap<NodeMRuby>(self)->mruby_node_object_class_);
+    }
+    static mrb_state* GetMRBState(Handle<Object> self) {
+        return (Unwrap<NodeMRuby>(self)->mrb_);
     }
 };
 
 #undef MRB_
 
-static Handle<Value> rubyobj2js(mrb_state *mrb, const mrb_value &v) {
-    Local<Function> func = NodeMRubyObject::constructor_template->GetFunction();
-    return rubyobj2js(mrb, v, func);
-}
-static Handle<Value> rubyobj2js(mrb_state *mrb, const mrb_value &v, Handle<Function> object_constructor) {
+static Handle<Value> mrubyobj2js(Handle<Object> nmrb, const mrb_value &v) {
+    mrb_state* mrb = NodeMRuby::GetMRBState(nmrb);
     HandleScope scope;
     switch (mrb_type(v)) {
     case MRB_TT_FALSE:
@@ -370,7 +394,7 @@ static Handle<Value> rubyobj2js(mrb_state *mrb, const mrb_value &v, Handle<Funct
         Handle<Array> retval = Array::New();
         mrb_value *ptr = RARRAY_PTR(v);
         for (int i=0; i<len; ++i) {
-            retval->Set(i, rubyobj2js(mrb, (ptr[i])));
+            retval->Set(i, mrubyobj2js(nmrb, (ptr[i])));
         }
         return scope.Close(retval);
     }
@@ -386,8 +410,8 @@ static Handle<Value> rubyobj2js(mrb_state *mrb, const mrb_value &v, Handle<Funct
                 mrb_value vv = kh_value(h,k);
 
                 retval->Set(
-                    rubyobj2js(mrb, kk),
-                    rubyobj2js(mrb, vv)
+                    mrubyobj2js(nmrb, kk),
+                    mrubyobj2js(nmrb, vv)
                 );
             }
         }
@@ -396,6 +420,7 @@ static Handle<Value> rubyobj2js(mrb_state *mrb, const mrb_value &v, Handle<Funct
     case MRB_TT_STRING: {
         return scope.Close(String::New(RSTRING_PTR(v), RSTRING_LEN(v)));
     }
+    case MRB_TT_PROC: // TODO: wrap proc?
     case MRB_TT_REGEX:
     case MRB_TT_STRUCT:
     case MRB_TT_EXCEPTION:
@@ -418,24 +443,17 @@ static Handle<Value> rubyobj2js(mrb_state *mrb, const mrb_value &v, Handle<Funct
         assert(vvv);
         Local<Value> arg0 = External::New(mrb);
         Local<Value> arg1 = External::New(vvv);
-        Local<Value> args[] = {arg0, arg1};
-        Local<Value> ret = object_constructor->NewInstance(2, args);
-        return scope.Close(ret);
-    }
-    case MRB_TT_PROC: {
-        mrb_value * vvv = (mrb_value*)malloc(sizeof(mrb_value));
-        *vvv = v;
-
-        assert(mrb);
-        assert(vvv);
-        Local<Value> arg0 = External::New(mrb);
-        Local<Value> arg1 = External::New(vvv);
-        Local<Value> args[] = {arg0, arg1};
-        Local<Value> ret = object_constructor->NewInstance(2, args);
+        Local<Value> arg2 = Local<Value>::New(nmrb);
+        Local<Value> args[] = {arg0, arg1, arg2};
+        Local<Function> object_constructor = NodeMRubyObject::constructor_template->GetFunction();
+        Local<Value> ret = object_constructor->NewInstance(3, args);
         return scope.Close(ret);
     }
     }
     return ThrowException(Exception::Error(String::New("[node-mruby] Unknown object type")));
+}
+static Handle<Value> mrubyobj2js(mrb_state *mrb, const mrb_value &v) {
+    return mrubyobj2js(mrb2nmrb(mrb), v);
 }
 
 inline static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val) {
@@ -458,11 +476,11 @@ inline static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val) {
         }
         return retval;
     } else if (val->IsFunction()) {
-        struct RClass *c = reinterpret_cast<NodeMRuby*>(mrb->ud)->mruby_node_function_class_;
+        struct RClass *c = reinterpret_cast<NodeMRubyUDContext*>(mrb->ud)->mruby_node_function_class();
         NodeMRubyValueContainer * vc = new NodeMRubyValueContainer(val);
         return mrb_obj_value(Data_Wrap_Struct(mrb, c, &node_mruby_function_data_type, vc));
     } else if (val->IsObject()) {
-        struct RClass *c = reinterpret_cast<NodeMRuby*>(mrb->ud)->mruby_node_object_class_;
+        struct RClass *c = reinterpret_cast<NodeMRubyUDContext*>(mrb->ud)->mruby_node_object_class();
         NodeMRubyValueContainer * vc = new NodeMRubyValueContainer(val);
         return mrb_obj_value(Data_Wrap_Struct(mrb, c, &node_mruby_function_data_type, vc));
     } else if (val->IsInt32()) {
@@ -475,6 +493,7 @@ inline static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val) {
         // TODO: better exception
         std::cerr << "OOOOOPS!" << std::endl;
         ThrowException(Exception::Error(String::New("Unknown type")));
+        return mrb_undef_value(); // should not reach here
     }
 }
 
@@ -557,7 +576,7 @@ static mrb_value node_object_method_missing(mrb_state *mrb, mrb_value self) {
         int alen2 = alen + ( mrb_nil_p(b) ? 0 : 1 );
         Handle<Value> *args = new Handle<Value>[alen2];
         for (int i=0; i<alen; i++) {
-            args[i] = rubyobj2js(mrb, a[i]);
+            args[i] = mrubyobj2js(mrb, a[i]);
         }
         if (!mrb_nil_p(b)) {
             args[alen] = rubyproc2jsfunc(mrb, b);
@@ -595,7 +614,7 @@ static mrb_value node_function_call(mrb_state *mrb, mrb_value self) {
 
     Handle<Value> *args = new Handle<Value>[alen];
     for (int i=0; i<alen; i++) {
-        args[i] = rubyobj2js(mrb, a[i]);
+        args[i] = mrubyobj2js(mrb, a[i]);
     }
     Local<Value> retval = Function::Cast(*jsobj)->Call(jsobj, alen, args);
     delete []args;
@@ -620,6 +639,20 @@ static Handle<Value> rubyproc2jsfunc(mrb_state*mrb, const mrb_value &v) {
     Local<Function> func = t->GetFunction();
     func->Set(0, inner);
     return scope.Close(func);
+}
+
+/**
+ * Implementation of NodeMRubyUDContext
+ */
+struct RClass *NodeMRubyUDContext::mruby_node_function_class() {
+    return NodeMRuby::GetFunctionClass(nmrb_);
+}
+struct RClass *NodeMRubyUDContext::mruby_node_object_class() {
+    return NodeMRuby::GetObjectClass(nmrb_);
+}
+
+static Handle<Object> mrb2nmrb(mrb_state* mrb) {
+    return reinterpret_cast<NodeMRubyUDContext*>(mrb->ud)->nmrb();
 }
 
 /**
