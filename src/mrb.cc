@@ -103,6 +103,7 @@ class NodeMRuby : ObjectWrap {
 public:
     mrb_state* mrb_;
     mrbc_context *cxt_;
+    struct RClass *mruby_node_object_class_;
 
     static Persistent<Function> require;
     static Persistent<Function> eval;
@@ -144,6 +145,10 @@ public:
         RClass * s = mrb_define_class(mrb_, "NodeJS", mrb_->object_class);
         mrb_define_class_method(mrb_, s, "require", node_require,      ARGS_REQ(1));
         mrb_define_class_method(mrb_, s, "eval",    node_eval,         ARGS_REQ(1));
+
+        this->mruby_node_object_class_ = mrb_define_class(mrb_, "NodeJS::Object", mrb_->object_class);
+
+        mrb_->ud = this;
     }
     ~NodeMRuby() {
         mrbc_context_free(mrb_, cxt_);
@@ -312,7 +317,7 @@ static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val) {
         }
         return hash;
         */
-        struct RClass *c = mrb_define_class(mrb, "MRuby::Object", mrb->object_class);
+        struct RClass *c = reinterpret_cast<NodeMRuby*>(mrb->ud)->mruby_node_object_class_;
         NodeMRubyValueContainer * vc = new NodeMRubyValueContainer(val);
         return mrb_obj_value(Data_Wrap_Struct(mrb, c, &node_mruby_function_data_type, vc));
     } else if (val->IsInt32()) {

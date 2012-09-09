@@ -7,6 +7,7 @@ test(function (t) {
     try {
         var mruby = new mRuby();
         mruby.loadString('NodeJS.require("fs"); 1');
+        mruby.loadString('NodeJS.require("fs").readFileSync');
     } catch (e) { console.log(e); }
     t.end();
 });
