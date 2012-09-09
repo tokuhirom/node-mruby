@@ -38,9 +38,13 @@ static const struct mrb_data_type node_mruby_function_data_type = {
 };
 
 
+/**
+ * mruby methods.
+ */
 static mrb_value node_require(mrb_state *mrb, mrb_value self);
 static mrb_value node_eval(mrb_state *mrb, mrb_value self);
 static mrb_value node_object_method_missing(mrb_state *mrb, mrb_value self);
+static mrb_value node_function_call(mrb_state *mrb, mrb_value self);
 
 #define VALUE_ (Unwrap<NodeMRubyObject>(args.This())->value_)
 #define MRB_   (Unwrap<NodeMRubyObject>(args.This())->mrb_)
@@ -105,6 +109,7 @@ public:
     mrb_state* mrb_;
     mrbc_context *cxt_;
     struct RClass *mruby_node_object_class_;
+    struct RClass *mruby_node_function_class_;
 
     static Persistent<Function> require;
     static Persistent<Function> eval;
@@ -150,6 +155,9 @@ public:
         this->mruby_node_object_class_ = mrb_define_class(mrb_, "NodeJS::Object", mrb_->object_class);
         MRB_SET_INSTANCE_TT(this->mruby_node_object_class_, MRB_TT_DATA);
         mrb_define_method(mrb_, this->mruby_node_object_class_, "method_missing", node_object_method_missing, ARGS_ANY());
+
+        this->mruby_node_function_class_ = mrb_define_class(mrb_, "NodeJS::Function", this->mruby_node_object_class_);
+        mrb_define_method(mrb_, this->mruby_node_object_class_, "call", node_function_call, ARGS_ANY());
 
         mrb_->ud = this;
     }
@@ -211,8 +219,6 @@ static Handle<Value> rubyobj2js(mrb_state *mrb, const mrb_value &v) {
     switch (mrb_type(v)) {
     case MRB_TT_FALSE:
         return scope.Close(Boolean::New(false));
-        // what's this object?
-        abort();
     case MRB_TT_TRUE:
         return scope.Close(Boolean::New(true));
     case MRB_TT_FIXNUM:
@@ -284,7 +290,7 @@ static Handle<Value> rubyobj2js(mrb_state *mrb, const mrb_value &v) {
     return ThrowException(Exception::Error(String::New("[node-mruby] Unknown object type")));
 }
 
-static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val) {
+inline static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val) {
     if (val->IsTrue()) {
         return mrb_true_value();
     } else if (val->IsFalse()) {
@@ -292,7 +298,7 @@ static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val) {
     } else if (val->IsNull()) {
         return mrb_nil_value();
     } else if (val->IsUndefined()) {
-        return mrb_undef_value();
+        return mrb_nil_value();
     } else if (val->IsString()) {
         v8::String::Utf8Value u8val(val);
         return mrb_str_new(mrb, *u8val, u8val.length());
@@ -304,7 +310,8 @@ static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val) {
         }
         return retval;
     } else if (val->IsFunction()) {
-        struct RClass *c = mrb_define_class(mrb, "MRuby::Function", mrb->object_class);
+        std::cerr << "FUNC!" << std::endl;
+        struct RClass *c = reinterpret_cast<NodeMRuby*>(mrb->ud)->mruby_node_function_class_;
         NodeMRubyValueContainer * vc = new NodeMRubyValueContainer(val);
         return mrb_obj_value(Data_Wrap_Struct(mrb, c, &node_mruby_function_data_type, vc));
     } else if (val->IsObject()) {
@@ -387,6 +394,22 @@ static mrb_value node_object_method_missing(mrb_state *mrb, mrb_value self) {
     } else {
         return jsobj2ruby(mrb, elem);
     }
+}
+
+static mrb_value node_function_call(mrb_state *mrb, mrb_value self) {
+    int alen;
+    mrb_value name, *a;
+
+    mrb_get_args(mrb, "*", &a, &alen);
+    Handle<Object> jsobj = ((NodeMRubyValueContainer*)mrb_get_datatype(mrb, self, &node_mruby_function_data_type))->v_->ToObject();
+
+    Handle<Value> *args = new Handle<Value>[alen];
+    for (int i=0; i<alen; i++) {
+        args[i] = rubyobj2js(mrb, a[i]);
+    }
+    Local<Value> retval = Function::Cast(*jsobj)->Call(jsobj, alen, args);
+    delete []args;
+    return jsobj2ruby(mrb, retval);
 }
 
 Persistent<FunctionTemplate> NodeMRuby::constructor_template;
