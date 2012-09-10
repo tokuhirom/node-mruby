@@ -19,6 +19,7 @@ TODO
 ----
 
   * write a node.js library in ruby, and export classes/functions as npm library.
+    * export mRuby's function/class to the node.js world?
   * better diag for syntax error in node.js level
   * inject object from node.js world to ruby world
   * save a instance of NodeMRuby to NodeMRubyObject

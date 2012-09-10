@@ -31,11 +31,13 @@ static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val);
 
 struct NodeMRubyValueContainer {
     Persistent<Value> v_;
-    NodeMRubyValueContainer(Handle<Value> v) {
+    int type_;
+    NodeMRubyValueContainer(Handle<Value> v, int t) : type_(t) {
         v_ = Persistent<Value>::New(v);
     }
     ~NodeMRubyValueContainer() {
         TRACE_DESTRUCTOR("NodeMRubyValueContainer");
+        std::cerr << "container type : " << type_ <<std::endl;
         v_.Dispose();
         v_.Clear();
     }
@@ -143,20 +145,6 @@ public:
     struct Callback {
         mrb_value callback;
     };
-    inline void Wrap2 (v8::Handle<v8::Object> handle) {
-        this->Wrap(handle);
-    }
-
-    /*
-    static void Init(Handle<Object> target) {
-        Local<FunctionTemplate> t = FunctionTemplate::New(NodeMRubyFunction::Call);
-        constructor_template = Persistent<FunctionTemplate>::New(t);
-        constructor_template->SetClassName(String::NewSymbol("mRubyFunction"));
-
-        Local<ObjectTemplate> instance_template = constructor_template->InstanceTemplate();
-        instance_template->SetInternalFieldCount(1);
-    }
-    */
 
     static Handle<Value> Call(const Arguments& args) {
         HandleScope scope;
@@ -501,11 +489,11 @@ inline static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val) {
         return retval;
     } else if (val->IsFunction()) {
         struct RClass *c = reinterpret_cast<NodeMRubyUDContext*>(mrb->ud)->mruby_node_function_class();
-        NodeMRubyValueContainer * vc = new NodeMRubyValueContainer(val);
+        NodeMRubyValueContainer * vc = new NodeMRubyValueContainer(val, 1);
         return mrb_obj_value(Data_Wrap_Struct(mrb, c, &node_mruby_function_data_type, vc));
     } else if (val->IsObject()) {
         struct RClass *c = reinterpret_cast<NodeMRubyUDContext*>(mrb->ud)->mruby_node_object_class();
-        NodeMRubyValueContainer * vc = new NodeMRubyValueContainer(val);
+        NodeMRubyValueContainer * vc = new NodeMRubyValueContainer(val, 2);
         return mrb_obj_value(Data_Wrap_Struct(mrb, c, &node_mruby_function_data_type, vc));
     } else if (val->IsInt32()) {
         return mrb_fixnum_value(val->Int32Value());
@@ -651,6 +639,8 @@ static mrb_value node_function_call(mrb_state *mrb, mrb_value self) {
 static Handle<Value> rubyproc2jsfunc(mrb_state*mrb, const mrb_value &v) {
     HandleScope scope;
 
+    DBG("rubyproc2jsfunc");
+
     // get a instance of NodeMRubyFunctionInner
     Local<Value> arg0 = External::New(new NodeMRubyFunctionInner::Callback(mrb, v));
     Local<Value> args[] = {arg0};
@@ -662,6 +652,7 @@ static Handle<Value> rubyproc2jsfunc(mrb_state*mrb, const mrb_value &v) {
     instance_template->SetInternalFieldCount(1);
     Local<Function> func = t->GetFunction();
     func->Set(0, inner);
+    func->Set(1, mrb2nmrb(mrb));
     return scope.Close(func);
 }
 

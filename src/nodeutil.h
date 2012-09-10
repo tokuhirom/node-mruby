@@ -69,6 +69,10 @@ inline static void jsobjdump(v8::Handle<v8::Value> val, int n=0) {
     for (int i=0; i<n; i++) {
         std::cerr << " ";
     }
+    if (n>32) {
+        std::cerr << "too deep" << std::endl;
+        return;
+    }
     if (val->IsTrue()) {
         std::cerr << "true" << std::endl;
     } else if (val->IsFalse()) {

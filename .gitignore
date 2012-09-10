@@ -3,3 +3,5 @@ node_modules/
 ya.js
 foo.js
 hoge.*
+core
+log
