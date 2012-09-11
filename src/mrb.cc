@@ -524,7 +524,8 @@ static mrb_value node_require(mrb_state *mrb, mrb_value self) {
         mrb_p(mrb, ret);
         return ret;
     } else {
-        return mrb_undef_value();
+        mrb_raise(mrb, E_RUNTIME_ERROR, "Cannot load a library: %s", RSTRING_PTR(rstr));
+        return mrb_nil_value();
     }
 }
 
@@ -539,7 +540,7 @@ static mrb_value node_eval(mrb_state *mrb, mrb_value self) {
     if (*retval) {
         return jsobj2ruby(mrb, retval);
     } else {
-        return mrb_undef_value();
+        return mrb_nil_value();
     }
 }
 
@@ -554,7 +555,7 @@ static mrb_value node_log(mrb_state *mrb, mrb_value self) {
     if (*retval) {
         return jsobj2ruby(mrb, retval);
     } else {
-        return mrb_undef_value();
+        return mrb_nil_value();
     }
 }
 
