@@ -359,7 +359,9 @@ public:
             DBG("--- Got mruby level exception in loadFile");
             mrb_value val = mrb_obj_value(MRB_->exc);
             mrb_p(MRB_, val);
-            return ThrowException(mrubyobj2js(args.This(), val));
+            // return ThrowException(mrubyobj2js(args.This(), val));
+            // TODO: better exception
+            return ThrowException(Exception::Error(String::New("Caused ruby level exception")));
         } else {
             return scope.Close(mrubyobj2js(args.This(), result));
         }
