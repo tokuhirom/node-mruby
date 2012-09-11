@@ -49,7 +49,6 @@
                     ]
                   }, {
                     'action': [
-                      # run libffi `make`
                       'sh', 'mrb-build.sh'
                   ]
                 }]
