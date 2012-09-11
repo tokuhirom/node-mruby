@@ -149,15 +149,20 @@ public:
     static Handle<Value> Call(const Arguments& args) {
         HandleScope scope;
 
-        DBG("NodeMRubyFunction::New");
+        // DBG("NodeMRubyFunction::New");
         Local<Value> jsinner = args.Callee()->Get(0);
         assert(jsinner->IsObject());
         NodeMRubyFunctionInner::Callback * cbstruct  = Unwrap<NodeMRubyFunctionInner>(jsinner->ToObject())->cb_;
 
         // TODO: optimize for few arguments.
         mrb_value * argv = new mrb_value[args.Length()];
+        mrb_state* mrb = cbstruct->mrb;
         for (int i=0; i<args.Length(); i++) {
+            int ai = mrb_gc_arena_save(mrb);
+
             argv[i] = jsobj2ruby(cbstruct->mrb, args[i]);
+
+            mrb_gc_arena_restore(mrb, ai);
         }
         mrb_sym mid = mrb_intern(cbstruct->mrb, "call");
         mrb_value retval = mrb_funcall_argv(cbstruct->mrb, cbstruct->callback, mid, args.Length(), argv);
