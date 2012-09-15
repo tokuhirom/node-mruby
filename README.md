@@ -26,10 +26,6 @@ TODO
 BUGS
 ----
 
-### SEGV
-
-    mruby.loadString('p NodeJS.eval(%q!function x() { }; return x;!)');
-
 ### NodeMRubyObject::constructor\_template->GetFunction() does not works correctly after mrb\_load\_string\_cxt
 
 Following code makes assertion error. I don't know why it caused.
