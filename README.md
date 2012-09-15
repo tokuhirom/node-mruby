@@ -22,7 +22,6 @@ TODO
     * export mRuby's function/class to the node.js world?
   * better diag for syntax error in node.js level
   * inject object from node.js world to ruby world
-  * save a instance of NodeMRuby to NodeMRubyObject
 
 BUGS
 ----
@@ -59,3 +58,6 @@ It's not reproduce under node.js 0.8.8
 
 path for require is not based on .rb file.
 
+### 'x'+3
+
+returns nil on mruby. Should it be exception?
