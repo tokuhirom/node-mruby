@@ -40,20 +40,6 @@ Following code makes assertion error. I don't know why it caused.
 
 It's not reproduce under node.js 0.8.8
 
-### segv
-
-    tap = NodeJS.require('tap')
-    fs = NodeJS.require('fs')
-    puts("---READY")
-    tap.test {|t|
-        puts("---READY")
-        NodeJS.eval('console.log("hoge")')
-        fs.readFile('hoge.js', 'utf-8') {|err, content|
-            NodeJS.eval('console.log("hoge")')
-            t.end()
-        }
-    }
-
 ### path for require
 
 path for require is not based on .rb file.
