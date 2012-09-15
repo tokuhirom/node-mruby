@@ -32,6 +32,12 @@
             String::New("Argument " #I " must be a string"))); \
     String::Utf8Value VAR(args[I]->ToString());
 
+#define ARG_STRR(I, VAR) \
+    if (args.Length() <= (I)) \
+        return ThrowException(Exception::TypeError( \
+            String::New("Argument " #I " must be a string"))); \
+    Local<String> VAR = args[I]->ToString();
+
 #define ARG_OBJ(I, VAR) \
     if (args.Length() <= (I) || !args[I]->IsObject()) \
         return ThrowException(Exception::TypeError( \

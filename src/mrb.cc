@@ -29,6 +29,8 @@ static Handle<Value> rubyproc2jsfunc(mrb_state*mrb, const mrb_value &v);
 static Handle<Object> mrb2nmrb(mrb_state* mrb);
 static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val);
 
+class NodeMRuby;
+
 struct NodeMRubyValueContainer {
     Persistent<Value> v_;
     int type_;
@@ -113,7 +115,6 @@ public:
     Callback * cb_;
 
     static void Init(Handle<Object> target) {
-        DBG("NodeMRubyFunctionInner::Init");
         Local<FunctionTemplate> t = FunctionTemplate::New(NodeMRubyFunctionInner::New);
         constructor_template = Persistent<FunctionTemplate>::New(t);
         constructor_template->SetClassName(String::NewSymbol("mRubyFunctionInner"));
@@ -174,6 +175,44 @@ public:
     }
 };
 
+class NodeMRubyMethod : ObjectWrap {
+public:
+    Persistent<Object> self_;
+    Persistent<String> method_name_;
+    static Persistent<FunctionTemplate> constructor_template;
+
+    static void Init(Handle<Object> target) {
+        Local<FunctionTemplate> t = FunctionTemplate::New(NodeMRubyMethod::New);
+        constructor_template = Persistent<FunctionTemplate>::New(t);
+        constructor_template->SetClassName(String::NewSymbol("mRubyMethod"));
+
+        Local<ObjectTemplate> instance_template = constructor_template->InstanceTemplate();
+        instance_template->SetInternalFieldCount(1);
+        instance_template->SetCallAsFunctionHandler(NodeMRubyMethod::Call, Undefined());
+    }
+
+    static Handle<Value> New(const Arguments& args) {
+        HandleScope scope;
+
+        if (!args.IsConstructCall())
+            return args.Callee()->NewInstance();
+
+        ARG_OBJ(0, jsself);
+        ARG_STRR(1, jsmeth);
+        (new NodeMRubyMethod(jsself, jsmeth))->Wrap(args.Holder());
+
+        return scope.Close(args.Holder());
+    }
+
+    static Handle<Value> Call(const Arguments& args);
+
+    NodeMRubyMethod(Handle<Object> jsself, Handle<String> jsmeth) {
+        this->self_ = Persistent<Object>::New(jsself);
+        this->method_name_ = Persistent<String>::New(jsmeth);
+    }
+    mrb_state* mrb();
+};
+
 #define VALUE_ (Unwrap<NodeMRubyObject>(args.This())->value_)
 #define MRB_   (Unwrap<NodeMRubyObject>(args.This())->mrb_)
 
@@ -192,6 +231,7 @@ public:
 
         Local<ObjectTemplate> instance_template = constructor_template->InstanceTemplate();
         instance_template->SetInternalFieldCount(1);
+        instance_template->SetNamedPropertyHandler(NodeMRubyObject::GetNamedProperty);
 
         NODE_SET_PROTOTYPE_METHOD(t, "inspect", NodeMRubyObject::inspect);
     }
@@ -212,6 +252,26 @@ public:
         return scope.Close(args.Holder());
     }
 
+    static Handle<Value> GetNamedProperty(Local<String> name,
+            const AccessorInfo &info) {
+        HandleScope scope;
+
+        if (info.This()->InternalFieldCount() < 1 || info.Data().IsEmpty()) {
+            return THROW_TYPE_ERROR("SetNamedProperty intercepted "
+                "by non-Proxy object");
+        }
+
+        Handle<Value> arg0(info.This());
+        Handle<Value> arg1 = name;
+        Handle<Value> args[] = {arg0, arg1};
+
+        Handle<Object> method = (
+            NodeMRubyMethod::constructor_template->GetFunction()->NewInstance(2, args)
+        );
+        return scope.Close(method);
+    }
+
+
     NodeMRubyObject(mrb_state* m, mrb_value* v, Handle<Object> nmrb) : mrb_(m), value_(v) {
         nmrb_ = Persistent<Object>::New(nmrb);
     }
@@ -230,6 +290,12 @@ public:
         mrb_value inspected = mrb_obj_inspect(MRB_, *val);
         Handle<Value> retval = mrubyobj2js(MRB_, inspected);
         return scope.Close(retval);
+    }
+    mrb_state* mrb() {
+        return mrb_;
+    }
+    mrb_value* value() {
+        return value_;
     }
 };
 
@@ -672,6 +738,33 @@ static Handle<Value> rubyproc2jsfunc(mrb_state*mrb, const mrb_value &v) {
     return scope.Close(func);
 }
 
+Handle<Value> NodeMRubyMethod::Call(const Arguments& args) {
+    HandleScope scope;
+
+    NodeMRubyMethod* myself = Unwrap<NodeMRubyMethod>(args.This());
+    mrb_value * argv = new mrb_value[args.Length()];
+    mrb_state* mrb = myself->mrb();
+    for (int i=0; i<args.Length(); i++) {
+        int ai = mrb_gc_arena_save(mrb);
+
+        argv[i] = jsobj2ruby(mrb, args[i]);
+
+        mrb_gc_arena_restore(mrb, ai);
+    }
+    String::Utf8Value u8meth(myself->method_name_);
+    mrb_sym mid = mrb_intern(mrb, *u8meth);
+    mrb_value* self = Unwrap<NodeMRubyObject>(myself->self_)->value();
+    mrb_value rbretval = mrb_funcall_argv(mrb, *self, mid, args.Length(), argv);
+    delete []argv;
+
+    Handle<Value> jsretval = mrubyobj2js(mrb, rbretval);
+    return scope.Close(jsretval);
+}
+
+mrb_state* NodeMRubyMethod::mrb() {
+    return Unwrap<NodeMRubyObject>(this->self_)->mrb();
+}
+
 /**
  * Implementation of NodeMRubyUDContext
  */
@@ -691,6 +784,7 @@ static Handle<Object> mrb2nmrb(mrb_state* mrb) {
  */
 Persistent<FunctionTemplate> NodeMRuby::constructor_template;
 Persistent<FunctionTemplate> NodeMRubyObject::constructor_template;
+Persistent<FunctionTemplate> NodeMRubyMethod::constructor_template;
 // Persistent<FunctionTemplate> NodeMRubyFunction::constructor_template;
 Persistent<FunctionTemplate> NodeMRubyFunctionInner::constructor_template;
 Persistent<Function> NodeMRuby::require;
@@ -700,6 +794,7 @@ Persistent<Function> NodeMRuby::log;
 extern "C" void init(Handle<Object> target) {
     DBG("Init");
     NodeMRuby::Init(target);
+    NodeMRubyMethod::Init(target);
     NodeMRubyObject::Init(target);
     NodeMRubyFunctionInner::Init(target);
     NodeMRubyLoadTest::Init(target);
