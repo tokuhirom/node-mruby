@@ -38,6 +38,7 @@ struct NodeMRubyValueContainer {
     ~NodeMRubyValueContainer() {
         TRACE_DESTRUCTOR("NodeMRubyValueContainer");
         std::cerr << "container type : " << type_ <<std::endl;
+        // v_.MakeWeak(this, NULL);
         v_.Dispose();
         v_.Clear();
     }
@@ -45,11 +46,12 @@ struct NodeMRubyValueContainer {
 
 static void node_mruby_value_container_free(mrb_state * mrb, void* data) {
     TRACE_DESTRUCTOR("Ruby#NodeMRubyValueContainer");
-    struct NodeMRubyValueContainer* d = static_cast<struct NodeMRubyValueContainer*>(data);
-    delete d;
+    // struct NodeMRubyValueContainer* d = static_cast<struct NodeMRubyValueContainer*>(data);
+//  delete d;
 }
 
 static const struct mrb_data_type node_mruby_function_data_type = {
+    // "mruby_function", NULL
     "mruby_function", node_mruby_value_container_free
 };
 
@@ -457,6 +459,7 @@ static Handle<Value> mrubyobj2js(Handle<Object> nmrb, const mrb_value &v) {
     case MRB_TT_RANGE: {
         mrb_value * vvv = (mrb_value*)malloc(sizeof(mrb_value));
         *vvv = v;
+        mrb_gc_mark_value(mrb, v);
 
         assert(mrb);
         assert(vvv);
@@ -495,16 +498,20 @@ inline static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val) {
         }
         return retval;
     } else if (val->IsFunction()) {
+        fprintf(stderr, "UD: %X\n", mrb->ud);
+        std::cerr << "HOGHEOGE" << std::endl;
         struct RClass *c = reinterpret_cast<NodeMRubyUDContext*>(mrb->ud)->mruby_node_function_class();
         NodeMRubyValueContainer * vc = new NodeMRubyValueContainer(val, 1);
         return mrb_obj_value(Data_Wrap_Struct(mrb, c, &node_mruby_function_data_type, vc));
     } else if (val->IsObject()) {
         struct RClass *c = reinterpret_cast<NodeMRubyUDContext*>(mrb->ud)->mruby_node_object_class();
         NodeMRubyValueContainer * vc = new NodeMRubyValueContainer(val, 2);
-        return mrb_obj_value(Data_Wrap_Struct(mrb, c, &node_mruby_function_data_type, vc));
+        RData * p = Data_Wrap_Struct(mrb, c, &node_mruby_function_data_type, vc);
+        return mrb_obj_value(p);
     } else if (val->IsInt32()) {
         return mrb_fixnum_value(val->Int32Value());
     } else if (val->IsUint32()) {
+        DBG("UI32");
         return mrb_fixnum_value(val->Uint32Value());
     } else if (val->IsNumber()) {
         return mrb_float_value(val->NumberValue());
@@ -581,7 +588,7 @@ static mrb_value node_object_method_missing(mrb_state *mrb, mrb_value self) {
     Context::Scope context_scope(context);
 
     mrb_get_args(mrb, "o*&", &name, &a, &alen, &b);
-    std::cerr << "[DEBUG] object#method_missing with arguments: " << alen << " " << (!mrb_nil_p(b) ? "with" : "without") << " block" << std::endl;
+    // std::cerr << "[DEBUG] object#method_missing with arguments: " << alen << " " << (!mrb_nil_p(b) ? "with" : "without") << " block" << std::endl;
     if (!SYMBOL_P(name)) {
         mrb_raise(mrb, E_TYPE_ERROR, "name should be a symbol");
     }
@@ -616,7 +623,7 @@ static mrb_value node_object_method_missing(mrb_state *mrb, mrb_value self) {
     } else {
         DBG("Is not a function");
         // mrb_p(mrb, jsobj2ruby(mrb, elem));
-        jsobjdump(jsobj);
+        // jsobjdump(jsobj);
         mrb_value ret =  jsobj2ruby(mrb, elem);
         return ret;
     }
@@ -629,6 +636,7 @@ static mrb_value node_function_call(mrb_state *mrb, mrb_value self) {
     int alen;
     mrb_value *a;
 
+    DBG("FUNCTION CALL");
     mrb_get_args(mrb, "*", &a, &alen);
     Handle<Object> jsobj = ((NodeMRubyValueContainer*)mrb_get_datatype(mrb, self, &node_mruby_function_data_type))->v_->ToObject();
 
@@ -690,6 +698,7 @@ Persistent<Function> NodeMRuby::eval;
 Persistent<Function> NodeMRuby::log;
 
 extern "C" void init(Handle<Object> target) {
+    DBG("Init");
     NodeMRuby::Init(target);
     NodeMRubyObject::Init(target);
     NodeMRubyFunctionInner::Init(target);

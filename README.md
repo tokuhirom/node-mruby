@@ -58,6 +58,6 @@ It's not reproduce under node.js 0.8.8
 
 path for require is not based on .rb file.
 
-### 'x'+3
+### 'x'+3(mRuby bug?)
 
 returns nil on mruby. Should it be exception?
