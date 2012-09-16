@@ -311,12 +311,13 @@ public:
 #define MRB_   (Unwrap<NodeMRuby>(args.This())->mrb_)
 #define CXT_   (Unwrap<NodeMRuby>(args.This())->cxt_)
 class NodeMRuby : ObjectWrap {
-public:
+protected:
     mrb_state* mrb_;
     mrbc_context *cxt_;
     struct RClass *mruby_node_object_class_;
     struct RClass *mruby_node_function_class_;
 
+public:
     static Persistent<Function> require;
     static Persistent<Function> eval;
     static Persistent<Function> log;
@@ -766,6 +767,9 @@ struct RClass *NodeMRubyUDContext::mruby_node_object_class() {
     return NodeMRuby::GetObjectClass(nmrb_);
 }
 
+/**
+ * Get a NodeMRuby object instance from mrb_state*.
+ */
 static Handle<Object> mrb2nmrb(mrb_state* mrb) {
     return reinterpret_cast<NodeMRubyUDContext*>(mrb->ud)->nmrb();
 }
