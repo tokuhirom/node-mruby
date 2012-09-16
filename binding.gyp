@@ -3,7 +3,13 @@
         {
             'target_name': 'mruby',
             'sources': [
-                './src/mrb.cc'
+                './src/mrb.cc',
+                './src/node_js_api.cc',
+                './src/node_object.cc',
+                './src/node_function.cc',
+                './src/value_container.cc',
+                './src/convert.cc',
+                './src/method.cc'
             ],
             'include_dirs': [
                   'vendor/mruby/include/'
