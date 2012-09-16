@@ -31,6 +31,9 @@ static mrb_value jsobj2ruby(mrb_state* mrb, Handle<Value> val);
 
 class NodeMRuby;
 
+/**
+ * mruby level value container.
+ */
 struct NodeMRubyValueContainer {
     Persistent<Value> v_;
     int type_;
@@ -216,6 +219,9 @@ public:
 #define VALUE_ (Unwrap<NodeMRubyObject>(args.This())->value_)
 #define MRB_   (Unwrap<NodeMRubyObject>(args.This())->mrb_)
 
+/**
+ * object wraps mruby's object.
+ */
 class NodeMRubyObject : ObjectWrap {
 public:
     mrb_state* mrb_;
