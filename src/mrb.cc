@@ -223,11 +223,11 @@ public:
  * object wraps mruby's object.
  */
 class NodeMRubyObject : ObjectWrap {
-public:
+protected:
     mrb_state* mrb_;
     mrb_value* value_;
     Persistent<Object> nmrb_;
-
+public:
     static Persistent<FunctionTemplate> constructor_template;
 
     static void Init(Handle<Object> target) {

@@ -15,7 +15,8 @@ test(function (t) {
     t.equivalent(mruby.loadString('{}'), {});
     t.equivalent(mruby.loadString('"hoge"'), 'hoge');
     t.equivalent(typeof(mruby.loadString('1..10')), 'object');
-    t.ok(mruby.loadString('1..50').inspect().match(/^#<Range:/), 'range');
+
+    t.equivalent(mruby.loadString('1..50').inspect(), '1..50');
     t.end();
 });
 
