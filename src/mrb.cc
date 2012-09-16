@@ -308,21 +308,6 @@ public:
 #undef MRB_
 #undef VALUE_
 
-class NodeMRubyLoadTest : ObjectWrap {
-public:
-    static void Init(Handle<Object> target) {
-        NODE_SET_METHOD(target, "loadTestOpenClose", NodeMRubyLoadTest::openClose);
-    }
-    static Handle<Value> openClose(const Arguments& args) {
-        HandleScope scope;
-        while (1) {
-            mrb_state *mrb = mrb_open();
-            mrb_close(mrb);
-        }
-        return scope.Close(Undefined());
-    }
-};
-
 #define MRB_   (Unwrap<NodeMRuby>(args.This())->mrb_)
 #define CXT_   (Unwrap<NodeMRuby>(args.This())->cxt_)
 class NodeMRuby : ObjectWrap {
@@ -803,7 +788,6 @@ extern "C" void init(Handle<Object> target) {
     NodeMRubyMethod::Init(target);
     NodeMRubyObject::Init(target);
     NodeMRubyFunctionInner::Init(target);
-    NodeMRubyLoadTest::Init(target);
     // NodeMRubyFunction::Init(target);
 }
 
