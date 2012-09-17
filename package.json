@@ -1,14 +1,15 @@
 {
   "name": "mruby",
   "version": "0.0.1",
-  "description": "node-mruby ==========",
+  "description": "mruby for node.js",
   "main": "index.js",
   "directories": {
     "test": "test"
   },
   "dependencies": {
-    "optimist":"~0.3.4",
-    "heredoc": "~0.0.2"
+    "here": "~0.0.2",
+    "bindings": "~1.0.0",
+    "optimist": "~0.3.4"
   },
   "devDependencies": {
     "tap": "~0.3.1"
@@ -17,8 +18,15 @@
     "test": "tap test/*.js",
     "install": "node-gyp rebuild"
   },
-  "repository": "",
-  "author": "",
-  "license": "BSD",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/tokuhirom/node-mruby.git"
+  },
+  "keywords": [
+    "mruby",
+    "ruby"
+  ],
+  "author": "Tokuhiro Matsuno",
+  "license": "MIT",
   "gypfile": true
 }
