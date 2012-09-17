@@ -7,11 +7,14 @@ app = NodeJS.require('http').createServer {|req, res|
 </head>
 <body>
 <h1>This is a example script for node-mruby + socket.io</h1>
+<div id="log">
+</div>
 <script src="/socket.io/socket.io.js"></script>
 <script>
     var socket = io.connect("http://localhost:8080");
     socket.on("news", function (data) {
         console.log(data);
+        document.getElementById("log").innerHTML += "<div>" + JSON.stringify(data) + "</div>";
         socket.emit("my other event", { my: "data" });
     });
 </script>
@@ -27,6 +30,7 @@ fs = NodeJS.require('fs')
 app.listen(8080)
 
 io.sockets.on('connection') {|socket|
+    console.log("On connection");
     socket.emit('news', {hello: 'world'})
     socket.on('my other event') {|data|
         p data
