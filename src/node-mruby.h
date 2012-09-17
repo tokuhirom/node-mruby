@@ -388,7 +388,9 @@ public:
         if (MRB_->exc) {
             mrb_value val = mrb_obj_value(MRB_->exc);
             mrb_p(MRB_, val);
-            return ThrowException(mrubyobj2js(args.This(), val));
+            // TODO: better diag
+            return ThrowException(Exception::Error(String::New("Got a ruby level exception")));
+            // return ThrowException(mrubyobj2js(args.This(), val));
         } else {
             return scope.Close(mrubyobj2js(args.This(), result));
         }
