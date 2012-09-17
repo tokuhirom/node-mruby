@@ -19,7 +19,7 @@ TODO
 ----
 
   * better diag for syntax error in node.js level
-  * inject object from node.js world to ruby world
+  * do not segv with ruby level exception.
 
 BUGS
 ----
@@ -38,6 +38,14 @@ It's not reproduce under node.js 0.8.8
 
 path for require is not based on .rb file.
 
+mRuby LIMITATIONS
+-----------------
+
 ### 'x'+3(mRuby bug?)
 
 returns nil on mruby. Should it be exception?
+
+### heredocs
+
+mruby doesn't work with heredocs?
+
