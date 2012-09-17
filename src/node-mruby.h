@@ -257,6 +257,7 @@ public:
     static Persistent<Function> eval;
     static Persistent<Function> log;
     static Persistent<Function> method_func_generator;
+    static Persistent<Array>    argv;
     static Persistent<FunctionTemplate> constructor_template;
 
     static void Init(Handle<Object> target) {
@@ -270,6 +271,7 @@ public:
         NODE_SET_PROTOTYPE_METHOD(t, "loadString", NodeMRuby::loadString);
         NODE_SET_PROTOTYPE_METHOD(t, "loadFile",   NodeMRuby::loadFile);
         NODE_SET_PROTOTYPE_METHOD(t, "callMethod", NodeMRuby::callMethod);
+        NODE_SET_PROTOTYPE_METHOD(t, "defineGlobalConst", NodeMRuby::defineGlobalConst);
         NODE_SET_METHOD(target, "init", NodeMRuby::init);
 
         target->Set(String::NewSymbol("mRuby"), constructor_template->GetFunction());
@@ -298,6 +300,8 @@ public:
         this->mruby_node_object_class_   = nm_inject_nodejs_object(mrb_);
         this->mruby_node_function_class_ = nm_inject_nodejs_function(mrb_, this->mruby_node_object_class_);
 
+        mrb_define_global_const(mrb_, "ARGV", jsobj2ruby(mrb_, NodeMRuby::argv));
+
         mrb_->ud = new NodeMRubyUDContext(nmrb);
     }
     ~NodeMRuby() {
@@ -316,10 +320,12 @@ public:
         ARG_FUNC(1, eval);
         ARG_FUNC(2, log);
         ARG_FUNC(3, methfun);
+        ARG_ARRAY(4, argv);
         NodeMRuby::require = Persistent<Function>::New(require);
         NodeMRuby::eval    = Persistent<Function>::New(eval);
         NodeMRuby::log     = Persistent<Function>::New(log);
         NodeMRuby::method_func_generator = Persistent<Function>::New(methfun);
+        NodeMRuby::argv    = Persistent<Array>::New(argv);
         return scope.Close(Undefined());
     }
     /**
@@ -398,6 +404,17 @@ public:
 
         Handle<Value> jsretval = mrubyobj2js(mrb, rbretval);
         return scope.Close(jsretval);
+    }
+    /**
+     * call mrb_define_global_const
+     */
+    static Handle<Value> defineGlobalConst(const Arguments& args) {
+        HandleScope scope;
+        mrb_state* mrb = GetMRBState(args.This());
+        ARG_STR(0, name);
+        ARG_VAL(1, val);
+        mrb_define_global_const(mrb, *name, jsobj2ruby(mrb, val));
+        return scope.Close(Undefined());
     }
 
     /**

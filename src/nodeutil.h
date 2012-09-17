@@ -68,6 +68,12 @@
               String::New("Argument " #I " must be a function"))); \
     Local<Function> VAR = Local<Function>::Cast(args[I]);
 
+#define ARG_VAL(I, VAR) \
+    if (args.Length() <= (I)) \
+        return ThrowException(Exception::TypeError( \
+              String::New("Argument " #I " must be passed"))); \
+    v8::Handle<v8::Value> VAR = args[I];
+
 /* ******************************************************
  * Class construction utilities
  */

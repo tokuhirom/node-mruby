@@ -53,6 +53,7 @@ Persistent<Function> NodeMRuby::require;
 Persistent<Function> NodeMRuby::eval;
 Persistent<Function> NodeMRuby::log;
 Persistent<Function> NodeMRuby::method_func_generator;
+Persistent<Array>    NodeMRuby::argv;
 
 extern "C" void init(Handle<Object> target) {
     DBG("Init");
