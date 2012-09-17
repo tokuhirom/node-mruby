@@ -34,6 +34,7 @@ static mrb_value node_object_method_missing(mrb_state *mrb, mrb_value self) {
     Handle<String> hsName = String::New(RSTRING_PTR(rsName), RSTRING_LEN(rsName));
     Handle<Value> elem = jsobj->Get(hsName);
     if (elem->IsFunction()) {
+        // call javascript method
         int alen2 = alen + ( mrb_nil_p(b) ? 0 : 1 );
         Handle<Value> *args = new Handle<Value>[alen2];
         for (int i=0; i<alen; i++) {
@@ -42,18 +43,26 @@ static mrb_value node_object_method_missing(mrb_state *mrb, mrb_value self) {
         if (!mrb_nil_p(b)) {
             args[alen] = rubyproc2jsfunc(mrb, b);
         }
-        Local<Value> retval = Function::Cast(*elem)->Call(jsobj, alen2, args);
+        {
+            TryCatch try_catch;
+            Local<Value> retval = Function::Cast(*elem)->Call(jsobj, alen2, args);
 
-        delete []args;
-        if (*retval) {
-            mrb_value ret =  jsobj2ruby(mrb, retval);
-            return ret;
-        } else { // got exception
-            DBG("JS LEVEL Exception");
-            // TODO: better exception
-            mrb_raise(mrb, E_RUNTIME_ERROR, "Got js exception");
-            return mrb_undef_value(); // should not reach here
+            delete []args;
+            if (*retval) {
+                mrb_value ret =  jsobj2ruby(mrb, retval);
+                return ret;
+            } else { // got exception
+                assert(try_catch.HasCaught());
+                Local<Value> exc(try_catch.Exception());
+                DisplayExceptionLine(try_catch);
+                DBG("JS LEVEL Exception");
+                // TODO: better exception
+            }
         }
+        // You need to raise exception after TryCatch object was released.
+        // mrb_raise calls longjmp, it doesn't call the destructor.
+        mrb_raise(mrb, E_RUNTIME_ERROR, "Got js exception");
+        return mrb_undef_value(); // should not reach here
     } else {
         DBG("Is not a function");
         // mrb_p(mrb, jsobj2ruby(mrb, elem));
