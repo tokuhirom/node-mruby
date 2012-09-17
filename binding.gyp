@@ -8,8 +8,8 @@
                 './src/node_object.cc',
                 './src/node_function.cc',
                 './src/value_container.cc',
-                './src/convert.cc',
-                './src/method.cc'
+                './src/node_mruby_object.cc',
+                './src/convert.cc'
             ],
             'include_dirs': [
                   'vendor/mruby/include/'

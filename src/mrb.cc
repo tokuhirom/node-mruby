@@ -48,16 +48,15 @@ Handle<Object> mrb2nmrb(mrb_state* mrb) {
  */
 Persistent<FunctionTemplate> NodeMRuby::constructor_template;
 Persistent<FunctionTemplate> NodeMRubyObject::constructor_template;
-Persistent<FunctionTemplate> NodeMRubyMethod::constructor_template;
 Persistent<FunctionTemplate> NodeMRubyFunctionInner::constructor_template;
 Persistent<Function> NodeMRuby::require;
 Persistent<Function> NodeMRuby::eval;
 Persistent<Function> NodeMRuby::log;
+Persistent<Function> NodeMRuby::method_func_generator;
 
 extern "C" void init(Handle<Object> target) {
     DBG("Init");
     NodeMRuby::Init(target);
-    NodeMRubyMethod::Init(target);
     NodeMRubyObject::Init(target);
     NodeMRubyFunctionInner::Init(target);
 }

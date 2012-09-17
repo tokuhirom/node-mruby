@@ -56,6 +56,12 @@
             String::New("Argument " #I " must be an Buffer"))); \
     void * VAR = Buffer::Data(args[I]->ToObject());
 
+#define ARG_ARRAY(I, VAR) \
+    if (args.Length() <= (I) || !args[I]->IsArray()) \
+        return ThrowException(Exception::TypeError( \
+            String::New("Argument " #I " must be an array"))); \
+    v8::Handle<v8::Array> VAR = v8::Handle<v8::Array>::Cast(args[I]);
+
 #define ARG_FUNC(I, VAR) \
     if (args.Length() <= (I) || !args[I]->IsFunction()) \
         return ThrowException(Exception::TypeError( \
@@ -92,6 +98,7 @@ inline static void jsobjdump(v8::Handle<v8::Value> val, int n=0) {
         std::cerr << *u8val << std::endl;
     } else if (val->IsArray()) {
         v8::Handle<v8::Array> jsav = v8::Handle<v8::Array>::Cast(val);
+        std::cerr << "# ARRAY(" << jsav->Length() << ")" << std::endl;
         for (size_t i=0; i<jsav->Length(); ++i) {
             jsobjdump(jsav->Get(i), n+1);
         }
