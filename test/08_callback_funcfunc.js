@@ -5,7 +5,7 @@ var test  = require('tap').test,
 var mruby = new mRuby();
 mruby.loadString(here(/*
     tap = NodeJS.require('tap');
-    mimi = NodeJS.require('./mimi.js')
+    mimi = NodeJS.require('./test/lib/mimi.js')
     tap.test {|t|
         mimi.r(mimi.obj, t)
         t.end()

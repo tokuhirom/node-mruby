@@ -1,11 +1,11 @@
 function Server() {
 }
-Server.prototype.on = function (func) {
-  console.log(func);
+Server.prototype.on = function (func, t) {
+    t.equals(typeof func, 'function');
 };
 module.exports = {
-  obj: new Server(),
-  r: function (svr) {
-    svr.on(function () { });
-  }
+    obj: new Server(),
+    r: function (svr, t) {
+        svr.on(function () { }, t);
+    }
 };

@@ -53,6 +53,17 @@ Handle<Value> mrubyobj2js(Handle<Object> nmrb, const mrb_value &v) {
     case MRB_TT_STRING: {
         return scope.Close(String::New(RSTRING_PTR(v), RSTRING_LEN(v)));
     }
+    case MRB_TT_DATA: {
+        struct RClass *klass = mrb_object(v)->c;
+        // if NodeMRuby::Function, unwrap and return it.
+        if (klass == NodeMRuby::GetFunctionClass(nmrb)) {
+            return ((NodeMRubyValueContainer*)mrb_get_datatype(mrb, v, &node_mruby_function_data_type))->v_->ToObject();
+        } else if (klass == NodeMRuby::GetObjectClass(nmrb)) {
+            return ((NodeMRubyValueContainer*)mrb_get_datatype(mrb, v, &node_mruby_function_data_type))->v_->ToObject();
+        } else {
+            // fallthrough
+        }
+    }
     case MRB_TT_PROC: // TODO: wrap proc?
     case MRB_TT_REGEX:
     case MRB_TT_STRUCT:
@@ -60,7 +71,6 @@ Handle<Value> mrubyobj2js(Handle<Object> nmrb, const mrb_value &v) {
     case MRB_TT_MATCH:
     case MRB_TT_FILE:
     case MRB_TT_ENV:
-    case MRB_TT_DATA:
     case MRB_TT_MAIN:
     case MRB_TT_OBJECT:
     case MRB_TT_CLASS:
