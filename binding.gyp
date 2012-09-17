@@ -33,7 +33,7 @@
                 }],
             ],
             'ldflags': [
-                '-L /home/tokuhirom/dev/node-mruby/vendor/mruby/lib/'
+                '-L <(PRODUCT_DIR)/../../vendor/mruby/lib/'
             ],
             'cflags': [
                 '-g',
