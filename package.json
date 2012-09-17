@@ -26,6 +26,7 @@
     "mruby",
     "ruby"
   ],
+  "engine": {"node": ">=0.8.9"},
   "author": "Tokuhiro Matsuno",
   "license": "MIT",
   "gypfile": true
