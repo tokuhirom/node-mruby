@@ -26,6 +26,7 @@
                 ['OS=="mac"', {
                     'xcode_settings': {
                         'OTHER_LDFLAGS': [
+                            '-L <(PRODUCT_DIR)/../vendor/mruby/lib/'
                         ],
                         'OTHER_CFLAGS': [
                         ]
