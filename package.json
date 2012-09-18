@@ -1,6 +1,6 @@
 {
   "name": "mruby",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "mruby for node.js",
   "main": "index.js",
   "directories": {
@@ -26,7 +26,9 @@
     "mruby",
     "ruby"
   ],
-  "engine": {"node": ">=0.8.9"},
+  "engine": {
+    "node": ">=0.8.9"
+  },
   "author": "Tokuhiro Matsuno",
   "license": "MIT",
   "gypfile": true
