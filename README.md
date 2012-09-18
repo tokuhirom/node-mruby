@@ -27,10 +27,6 @@ mRuby LIMITATIONS
 
 It's not a node-mruby issue. It's may mruby's.
 
-### 'x'+3(mRuby bug?)
-
-returns nil on mruby. Should it be exception?
-
 ### heredocs
 
 mruby doesn't work with heredocs?
