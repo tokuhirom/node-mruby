@@ -54,7 +54,6 @@ static mrb_value node_object_method_missing(mrb_state *mrb, mrb_value self) {
                 return ret;
             } else { // got exception
                 assert(try_catch.HasCaught());
-                Local<Value> exc(try_catch.Exception());
                 Local<Message> msg = try_catch.Message();
                 DisplayExceptionLine(try_catch);
                 if (*msg) {
