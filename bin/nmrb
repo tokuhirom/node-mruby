@@ -35,7 +35,7 @@ if (typeof argv.e !== 'undefined') {
         output: process.stdout
     });
 
-    rl.setPrompt('✖╹◡╹✖  ☆☆☆ ');
+    rl.setPrompt('nmrb> ');
     rl.prompt();
     rl.on('line', function(src) {
         try {
