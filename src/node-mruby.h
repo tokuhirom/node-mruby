@@ -343,6 +343,7 @@ public:
         if (MRB_->exc) {
             mrb_value val = mrb_obj_value(MRB_->exc);
             mrb_p(MRB_, val);
+            MRB_->exc = 0; // clear error
             // TODO: better diag
             return ThrowException(Exception::Error(String::New("Got a ruby level exception")));
             // return ThrowException(mrubyobj2js(args.This(), val));
@@ -370,6 +371,7 @@ public:
             DBG("--- Got mruby level exception in loadFile");
             mrb_value val = mrb_obj_value(MRB_->exc);
             mrb_p(MRB_, val);
+            MRB_->exc = 0; // clear error
             // return ThrowException(mrubyobj2js(args.This(), val));
             // TODO: better exception
             return ThrowException(Exception::Error(String::New("Caused ruby level exception")));
