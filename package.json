@@ -22,6 +22,9 @@
     "type": "git",
     "url": "git://github.com/tokuhirom/node-mruby.git"
   },
+  "bin": {
+    "nmrb": "./bin/nmrb"
+  },
   "keywords": [
     "mruby",
     "ruby"
