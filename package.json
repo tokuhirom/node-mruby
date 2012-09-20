@@ -1,6 +1,6 @@
 {
   "name": "mruby",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "mruby for node.js",
   "main": "index.js",
   "directories": {
