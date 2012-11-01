@@ -46,7 +46,7 @@ static mrb_value node_require(mrb_state *mrb, mrb_value self) {
         mrb_p(mrb, ret);
         return ret;
     } else {
-        mrb_raise(mrb, E_RUNTIME_ERROR, "Cannot load a library: %s", RSTRING_PTR(rstr));
+        mrb_raisef(mrb, E_RUNTIME_ERROR, "Cannot load a library: %s", RSTRING_PTR(rstr));
         return mrb_nil_value();
     }
 }
